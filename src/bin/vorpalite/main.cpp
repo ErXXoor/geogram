@@ -11,7 +11,7 @@
 #include <geogram/basic/process.h>
 #include <geogram/basic/file_system.h>
 #include <geogram/basic/geometry_nd.h>
-
+#include <geogram/basic/line_stream.h>
 #include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_io.h>
 #include <geogram/mesh/mesh_geometry.h>
@@ -369,134 +369,149 @@ namespace {
      * \retval 0 on success
      * \retval non-zero value otherwise
      */
-    int polyhedral_mesher(
-        const std::string& input_filename, std::string output_filename
+    int polyhedral_2Dmesher(
+            const std::string& input_filename, std::string output_filename
     ) {
         Mesh M_in;
         Mesh M_out;
-	Mesh M_points;
+        Mesh M_points;
 
         Logger::div("Polyhedral meshing");
 
-        if(!mesh_load(input_filename, M_in)) {
-            return 1;
+        //load 2d mesh
+        int dimension_ = 8;
+        M_in.clear();
+        M_in.vertices.set_double_precision();
+        M_in.vertices.set_dimension(dimension_);
+        LineInput in(input_filename);
+        if (!in.OK()) {
+            return false;
         }
-        
-        if(M_in.cells.nb() == 0) {
-            Logger::out("Poly") << "Mesh is not a volume" << std::endl;
-            Logger::out("Poly") << "Trying to tetrahedralize" << std::endl;
-            if(!mesh_tetrahedralize(M_in)) {
+        vector<double> P(dimension_);
+        vector<index_t> facet_vertices;
+        while (!in.eof() && in.get_line()) {
+            in.get_fields();
+            if (in.nb_fields() >= 1) {
+                if (in.field_matches(0, "v")) {
+                    for (coord_index_t c = 0; c < dimension_; c++) {
+                        if (index_t(c + 1) < in.nb_fields()) {
+                            P[c] = in.field_as_double(index_t(c + 1));
+                        }
+                        else {
+                            P[c] = 0.0;
+                        }
+                    }
+                    index_t v = M_in.vertices.create_vertex();
+                    double* p = M_in.vertices.point_ptr(v);
+                    for (index_t c = 0; c < dimension_; ++c) {
+                        p[c] = P[c];
+                    }
+                }
+                else if (in.field_matches(0, "f")) {
+                    if (in.nb_fields() < 3) {
+                        Logger::err("I/O")
+                                << "Line " << in.line_number()
+                                << ": facet only has " << in.nb_fields()
+                                << " corners (at least 3 required)"
+                                << std::endl;
+                        return false;
+                    }
+
+                    facet_vertices.resize(0);
+                    for (index_t i = 1; i < in.nb_fields(); i++) {
+                        // In .obj files,
+                        // negative vertex index means
+                        // nb_vertices - vertex index
+                        int s_vertex_index = in.field_as_int(i);
+                        index_t vertex_index = 0;
+                        if (s_vertex_index < 0) {
+                            vertex_index = index_t(
+                                    1 + int(M_in.vertices.nb()) + s_vertex_index
+                            );
+                        }
+                        else {
+                            vertex_index = index_t(s_vertex_index);
+                        }
+                        facet_vertices.push_back(vertex_index - 1);
+                    }
+
+                    index_t f = M_in.facets.create_polygon(
+                            facet_vertices.size()
+                    );
+                    for (index_t lv = 0; lv < facet_vertices.size(); ++lv) {
+                        M_in.facets.set_vertex(f, lv, facet_vertices[lv]);
+                    }
+                }
+            }
+        }
+        M_in.facets.connect();
+
+
+        index_t dim = M_in.vertices.dimension();
+        index_t spec_dim = 8;
+        if (spec_dim != 0 && spec_dim <= dim) {
+            dim = spec_dim;
+        }
+
+        CentroidalVoronoiTesselation CVT(&M_in, coord_index_t(dim));
+        CVT.set_volumetric(false);
+
+        if (CmdLine::get_arg("poly:points_file") == "") {
+
+            Logger::div("Generate random samples");
+
+            CVT.compute_initial_sampling(
+                    CmdLine::get_arg_uint("remesh:nb_pts")
+            );
+
+            std::string fname1 = "voronoi_seeds_pre.obj";
+//            CVT.write_points(fname1);
+
+            Logger::div("Optimize sampling");
+
+            try {
+                index_t nb_iter = CmdLine::get_arg_uint("opt:nb_Lloyd_iter");
+                ProgressTask progress("Lloyd", nb_iter);
+                CVT.set_progress_logger(&progress);
+                CVT.Lloyd_iterations(nb_iter);
+            }
+            catch (const TaskCanceled&) {
+            }
+
+            try {
+                index_t nb_iter = CmdLine::get_arg_uint("opt:nb_Newton_iter");
+                ProgressTask progress("Newton", nb_iter);
+                CVT.set_progress_logger(&progress);
+                CVT.Newton_iterations(nb_iter);
+            }
+            catch (const TaskCanceled&) {
+            }
+
+            CVT.set_progress_logger(nullptr);
+
+            std::string fname2 = "voronoi_seeds_opt.obj";
+//            CVT.write_points(fname2);
+        }
+        else {
+            if (!mesh_load(CmdLine::get_arg("poly:points_file"), M_points)) {
                 return 1;
             }
-            M_in.cells.compute_borders();
+            CVT.delaunay()->set_vertices(
+                    M_points.vertices.nb(), M_points.vertices.point_ptr(0)
+            );
         }
 
-	index_t dim = M_in.vertices.dimension();
-	index_t spec_dim = CmdLine::get_arg_uint("poly:embedding_dim");
-	if(spec_dim != 0 && spec_dim <= dim) {
-	    dim = spec_dim;
-	}
-	
-        CentroidalVoronoiTesselation CVT(&M_in, coord_index_t(dim));
-        CVT.set_volumetric(true);
+        CVT.RVD()->set_exact_predicates(true);
+        {
+            CVT.RVD()->compute_RVD(M_out, 3);
+        }
 
-	if(CmdLine::get_arg("poly:points_file") == "") {
+        {
+            MeshIOFlags flags;
+            flags.set_attributes(MESH_ALL_ATTRIBUTES);
+            mesh_save(M_out, output_filename, flags);
+        }
 
-	    Logger::div("Generate random samples");
-	    
-	    CVT.compute_initial_sampling(
-		CmdLine::get_arg_uint("remesh:nb_pts")
-	    );
-
-	    Logger::div("Optimize sampling");
-
-	    try {
-		index_t nb_iter = CmdLine::get_arg_uint("opt:nb_Lloyd_iter");
-		ProgressTask progress("Lloyd", nb_iter);
-		CVT.set_progress_logger(&progress);
-		CVT.Lloyd_iterations(nb_iter);
-	    }
-	    catch(const TaskCanceled&) {
-	    }
-
-	    try {
-		index_t nb_iter = CmdLine::get_arg_uint("opt:nb_Newton_iter");
-		    ProgressTask progress("Newton", nb_iter);
-		CVT.set_progress_logger(&progress);
-		CVT.Newton_iterations(nb_iter);
-	    }
-	    catch(const TaskCanceled&) {
-	    }
-        
-	    CVT.set_progress_logger(nullptr);
-	} else {
-	    if(!mesh_load(CmdLine::get_arg("poly:points_file"), M_points)) {
-		return 1;
-	    }
-	    CVT.delaunay()->set_vertices(
-		M_points.vertices.nb(), M_points.vertices.point_ptr(0)
-	    );
-	}
-
-	CVT.RVD()->set_exact_predicates(true);
-	{
-	    BuildRVDMesh callback(M_out);
-	    std::string simplify = CmdLine::get_arg("poly:simplify");
-	    if(simplify == "tets_voronoi_boundary") {
-		double angle_threshold =
-		    CmdLine::get_arg_double("poly:normal_angle_threshold");
-		callback.set_simplify_boundary_facets(true, angle_threshold);
-	    } else if(simplify == "tets_voronoi") {
-		callback.set_simplify_voronoi_facets(true);
-	    } else if(simplify == "tets") {
-		callback.set_simplify_internal_tet_facets(true);		
-	    } else if(simplify == "none") {
-		callback.set_simplify_internal_tet_facets(false);
-	    } else {
-		Logger::err("Poly")
-		    << simplify << " invalid cells simplification mode"
-		    << std::endl;
-	    }
-	    callback.set_tessellate_non_convex_facets(
-		CmdLine::get_arg_bool("poly:tessellate_non_convex_facets")
-	    );
-	    callback.set_shrink(CmdLine::get_arg_double("poly:cells_shrink"));
-	    callback.set_generate_ids(
-		CmdLine::get_arg_bool("poly:generate_ids") ||
-		FileSystem::extension(output_filename) == "ovm"
-	    );
-	    CVT.RVD()->for_each_polyhedron(callback);				
-	}
-
-	if(
-	    FileSystem::extension(output_filename) == "mesh" ||
-	    FileSystem::extension(output_filename) == "meshb"
-	) {
-	    Logger::warn("Poly")
-		<< "Specified file format does not handle polygons"
-		<< " (falling back to .obj)"
-		<< std::endl;
-	    output_filename =
-		FileSystem::dir_name(output_filename) + "/" +
-		FileSystem::base_name(output_filename) + ".obj";
-	}
-
-	if(
-	    CmdLine::get_arg_bool("poly:generate_ids") &&
-	    FileSystem::extension(output_filename) != "geogram" &&
-	    FileSystem::extension(output_filename) != "geogram_ascii"
-	) {
-	    Logger::warn("Poly") << "Speficied file format does not handle ids"
-				 << " (use .geogram or .geogram_ascii instead)"
-				 << std::endl;
-	}
-	
-	{
-	    MeshIOFlags flags;
-	    flags.set_attributes(MESH_ALL_ATTRIBUTES);
-	    mesh_save(M_out, output_filename, flags);
-	}
-        
         return 0;
     }
 
@@ -574,7 +589,7 @@ int main(int argc, char** argv) {
 
 	
         if(CmdLine::get_arg_bool("poly")) {
-            return polyhedral_mesher(input_filename, output_filename);
+            return polyhedral_2Dmesher(input_filename, output_filename);
         }
         
         Mesh M_in, M_out;

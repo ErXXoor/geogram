@@ -212,16 +212,38 @@ namespace GEO {
             const double* point, const SymbolicVertex& sym
         ) {
             index_t id = vertex_map_.find_or_create_vertex(
-                current_seed_, sym
+
+                    current_seed_, sym
             );
             if(id >= nb_vertices_) {
                 index_t v = target_->vertices.create_vertex();
+
+                std::set<index_t> bisec;
+                int bn = sym.nb_bisectors();
+                for (int t = 0; t < sym.size(); t++)
+                {
+                    if(sym[t] > 0)
+                        bisec.insert(sym[t]);
+                }
+                target_->vertices.set_bisectors(v,bisec);
                 for(index_t c=0; c<dim_; ++c) {
                     target_->vertices.point_ptr(v)[c] = point[c];
                 }
                 nb_vertices_ = id + 1;
             }
-            facet_vertices_.push_back(id);
+            else
+            {
+                std::set<index_t> bisec = target_->vertices.get_bisectors(id)
+                ;
+                for (int t = 0; t < sym.size(); t++)
+                {
+                    if (sym[t] > 0)
+                        bisec.insert(sym[t]);
+                }
+                target_->vertices.set_bisectors(id,bisec);
+            }
+            facet_vertices_.push_back(id)
+                    ;
         }
 
         /**

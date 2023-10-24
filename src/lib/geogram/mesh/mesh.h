@@ -541,6 +541,20 @@ namespace GEO {
         );
 
         void pop() override;
+
+        const std::set<index_t> get_bisectors(index_t v) const
+        {
+            geo_debug_assert(v<nb());
+            return bisectors[v];
+        }
+
+        void set_bisectors(index_t v,std::set<index_t> val)
+        {
+            if(v<bisectors.size())
+                bisectors[v] = val;
+            else
+                bisectors.emplace_back(val);
+        }
         
     protected:
         
@@ -600,6 +614,9 @@ namespace GEO {
         MeshCellCornersStore& cell_corners_;
         Attribute<double> point_;
         Attribute<float> point_fp32_;
+
+        std::vector<std::set<index_t>> bisectors;
+
 
         friend class Mesh;
         friend class GeogramIOHandler;
@@ -2776,6 +2793,8 @@ namespace GEO {
         const MeshSubElementsStore& get_subelements_by_type(
             MeshElementsFlags what
         ) const;
+
+
 
         /**
          * \brief Gets a subelement name by subelement type.

@@ -433,63 +433,59 @@ namespace GEO {
             return true;
         }
 
-	bool save(
-            const Mesh& M, const std::string& filename,
-            const MeshIOFlags& ioflags
+        bool save(
+                const Mesh& M, const std::string& filename,
+                const MeshIOFlags& ioflags
         ) override {
 
-	    std::string mtl_filename;
-	    std::string mtl_filename_fullpath;
-	    
-	    if(ioflags.get_texture_filename().length() != 0) {
-		mtl_filename =
-		    FileSystem::base_name(filename) + ".mtl";
-		mtl_filename_fullpath =
-		    FileSystem::dir_name(filename) + "/" +
-		    mtl_filename;
-		std::ofstream mtl_out(mtl_filename_fullpath.c_str());
-		if(!mtl_out) {
-		    Logger::err("I/O") << "Could not create mtl file "
-				       << mtl_filename_fullpath
-				       << std::endl;
-		} else {
-		    Logger::out("I/O") << "Saving file "
-				       << mtl_filename_fullpath
-				       << std::endl;
-		    mtl_out << "newmtl Material_0" << std::endl;
-		    mtl_out << "map_Kd "
-			    << FileSystem::base_name(
-                                ioflags.get_texture_filename()
-                            )
-			    << "."
-			    << FileSystem::extension(
-                                ioflags.get_texture_filename()
-                            )
-			    << std::endl;
-		}
-	    }
-	    
+            std::string mtl_filename;
+            std::string mtl_filename_fullpath;
+
+            if(ioflags.get_texture_filename().length() != 0) {
+                mtl_filename =
+                        FileSystem::base_name(filename) + ".mtl";
+                mtl_filename_fullpath =
+                        FileSystem::dir_name(filename) + "/" +
+                        mtl_filename;
+                std::ofstream mtl_out(mtl_filename_fullpath.c_str());
+                if(!mtl_out) {
+                    Logger::err("I/O") << "Could not create mtl file "
+                                       << mtl_filename_fullpath
+                                       << std::endl;
+                } else {
+                    Logger::out("I/O") << "Saving file "
+                                       << mtl_filename_fullpath
+                                       << std::endl;
+                    mtl_out << "newmtl Material_0" << std::endl;
+                    mtl_out << "map_Kd "
+                            << FileSystem::base_name(ioflags.get_texture_filename())
+                            << "."
+                            << FileSystem::extension(ioflags.get_texture_filename())
+                            << std::endl;
+                }
+            }
+
             geo_assert(M.vertices.dimension() >= dimension_);
             std::ofstream out(filename.c_str());
             if(!out) {
                 Logger::err("I/O")
-                    << "Could not create file \'" 
-                    << filename << "\'" << std::endl;
+                        << "Could not create file \'"
+                        << filename << "\'" << std::endl;
                 return false;
             }
 
             bind_attributes(M, ioflags, false);
-            
+
             std::vector<std::string> args;
             CmdLine::get_args(args);
             for(index_t i = 0; i < args.size(); ++i) {
                 out << "# vorpaline " << args[i] << std::endl;
             }
 
-	    if(mtl_filename.length() != 0) {
-		out << "mtllib " << mtl_filename << std::endl;
-	    }
-	    
+            if(mtl_filename.length() != 0) {
+                out << "mtllib " << mtl_filename << std::endl;
+            }
+
             vector<double> P(dimension_);
             for(index_t v = 0; v < M.vertices.nb(); ++v) {
                 get_mesh_point(M, v, P.data(), dimension_);
@@ -500,54 +496,91 @@ namespace GEO {
                 out << std::endl;
             }
 
-	    // If mesh has facet corner tex coords, then "compress" tex coords
-	    // by generating a single "texture vertex" (vt) for each group of
-	    // corners with the same texture coordinates (makes the .obj file
-	    // smaller).
-	    vector<index_t> vt_old2new;
-	    vector<index_t> vt_index;
-	    if(tex_coord_.is_bound()) {
-		index_t nb_vt = Geom::colocate_by_lexico_sort(
-		    &tex_coord_[0], 2, M.facet_corners.nb(), vt_old2new, 2
-		);
-		vt_index.assign(M.facet_corners.nb(), index_t(-1));
-		index_t cur_vt=0;
-		for(index_t c: M.facet_corners) {
-		    if(vt_old2new[c] == c) {
-			out << "vt " << tex_coord_[2*c] << " "
-			    << tex_coord_[2*c+1] << std::endl;
-			vt_index[c] = cur_vt;
-			++cur_vt;
-		    }
-		}
-		geo_assert(cur_vt == nb_vt);
-	    } else if(vertex_tex_coord_.is_bound()) {
-		for(index_t v: M.vertices) {
-		    out << "vt " << vertex_tex_coord_[2*v] << " "
-			<< vertex_tex_coord_[2*v+1] << std::endl;
-		}
-	    }
-
-	    out << "usemtl Material_0" << std::endl;
-            if(ioflags.has_element(MESH_FACETS)) {
-                for(index_t f: M.facets) {
-                    out << "f ";
-                    for(index_t c = M.facets.corners_begin(f);
-                        c < M.facets.corners_end(f); ++c
-                    ) {
-                        out << M.facet_corners.vertex(c) + 1;
-			if(tex_coord_.is_bound()) {
-			    out << "/" << vt_index[ vt_old2new[c] ] + 1;
-			} else if(vertex_tex_coord_.is_bound()) {
-			    out << "/" << M.facet_corners.vertex(c) + 1;
-			}
-			out << " ";
+            // If mesh has facet corner tex coords, then "compress" tex coords
+            // by generating a single "texture vertex" (vt) for each group of
+            // corners with the same texture coordinates (makes the .obj file
+            // smaller).
+            vector<index_t> vt_old2new;
+            vector<index_t> vt_index;
+            if(tex_coord_.is_bound()) {
+                index_t nb_vt = Geom::colocate_by_lexico_sort(
+                        &tex_coord_[0], 2, M.facet_corners.nb(), vt_old2new, 2
+                );
+                vt_index.assign(M.facet_corners.nb(), index_t(-1));
+                index_t cur_vt=0;
+                for(index_t c=0; c<M.facet_corners.nb(); ++c) {
+                    if(vt_old2new[c] == c) {
+                        out << "vt " << tex_coord_[2*c] << " "
+                            << tex_coord_[2*c+1] << std::endl;
+                        vt_index[c] = cur_vt;
+                        ++cur_vt;
                     }
-                    out << std::endl;
                 }
-                if(facet_region_.is_bound()) {
+                geo_assert(cur_vt == nb_vt);
+            } else if(vertex_tex_coord_.is_bound()) {
+                for(index_t v=0; v<M.vertices.nb(); ++v) {
+                    out << "vt " << vertex_tex_coord_[2*v] << " "
+                        << vertex_tex_coord_[2*v+1] << std::endl;
+                }
+            }
+
+            out << "usemtl Material_0" << std::endl;
+            if(ioflags.has_element(MESH_FACETS)) {
+                for(index_t f = 0; f < M.facets.nb(); ++f) {
+
+
+                    /*out << "f ";
+                    for (index_t c = M.facets.corners_begin(f);
+                        c < M.facets.corners_end(f); ++c
+                        ) {
+                        out << M.facet_corners.vertex(c) + 1;
+                        if (tex_coord_.is_bound()) {
+                            out << "/" << vt_index[vt_old2new[c]] + 1;
+                        }
+                        else if (vertex_tex_coord_.is_bound()) {
+                            out << "/" << M.facet_corners.vertex(c) + 1;
+                        }
+                        out << " ";
+                    }
+                    out << std::endl;*/
+
+                    //if (f == 2)
+                    //	int ss = 1;
+                    //break;
+
+                    std::vector<index_t> facets;
+                    for (index_t c = M.facets.corners_begin(f);
+                         c < M.facets.corners_end(f); ++c
+                            ) {
+                        facets.push_back(M.facet_corners.vertex(c));
+                    }
+                    for (int t = 0; t < facets.size(); t++)
+                    {
+                        bool bout = false;
+                        const std::set<index_t> bise = M.vertices.get_bisectors(facets[t]);
+                        const std::set<index_t> bise1 = M.vertices.get_bisectors(facets[(t + 1) % facets.size()]);
+                        if (!bise1.empty() && !bise.empty()) {
+                            std::vector<index_t> common_data;
+                            set_intersection(bise.begin(), bise.end(), bise1.begin(), bise1.end(),
+                                             std::back_inserter(common_data));
+                            if (bise.size() <= 2 && bise1.size() <= 2 && common_data.size() != bise.size())
+                                bout = false;
+                            else if (!common_data.empty())
+                                bout = true;
+                        }
+                        if (bout)
+                        {
+                            out << "l " << facets[t] + 1 << " " << facets[(t + 1) % facets.size()] + 1;
+                            out << std::endl;
+                        }
+                    }
+
+                }
+                if(
+                        facet_region_.is_bound()
+                        ) {
                     out << "# attribute chart facet integer" << std::endl;
-                    for(index_t f: M.facets) {
+                    for(index_t f = 0; f < M.facets.nb(); ++f) {
                         out << "# attrs f "
                             << f + 1 << " "
                             << facet_region_[f] << std::endl;
@@ -555,16 +588,8 @@ namespace GEO {
                 }
             }
 
-            if(ioflags.has_element(MESH_EDGES)) {
-                for(index_t e: M.edges) {
-                    out << "l "
-                        << M.edges.vertex(e,0)+1 << " "
-                        << M.edges.vertex(e,1)+1 << std::endl;
-                }
-            }
-            
             unbind_attributes();
-            
+
             return true;
         }
 
