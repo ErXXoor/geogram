@@ -75,13 +75,14 @@
 
 // Used by debugging functions and statistics
 #include <geogram/mesh/index.h>
+#include <geogram/basic/debug_stream.h>
 #include <set>
 #include <deque>
 
-// #define CDT_NAIVE // use naive per-edge method (kept for reference/debugging)
+//#define CDT_NAIVE // use naive per-edge method (kept for reference/debugging)
 
 #ifdef GEO_DEBUG
-// #define CDT_DEBUG // display *lots* of messages and activates costly checks
+//#define CDT_DEBUG // display *lots* of messages and activates costly checks
 #endif
 
 #ifdef CDT_DEBUG
@@ -96,7 +97,8 @@ namespace GEO {
         nv_(0),
         ncnstr_(0),
         delaunay_(true),
-        exact_incircle_(true) {
+        exact_incircle_(true),
+        exact_intersections_(true) {
     }
 
     CDTBase2d::~CDTBase2d() {
@@ -112,6 +114,7 @@ namespace GEO {
         Tecnstr_.resize(0);
         Tnext_.resize(0);
         Tprev_.resize(0);
+        clear_cache();
     }
 
     void CDTBase2d::create_enclosing_triangle(
@@ -125,6 +128,7 @@ namespace GEO {
         index_t t0 = Tnew();
         Tset(t0, v0, v1, v2, index_t(-1), index_t(-1), index_t(-1));
         orient_012_ = orient2d(0,1,2);
+        geo_assert(orient_012_ != ZERO);
     }
 
     void CDTBase2d::create_enclosing_quad(
@@ -142,9 +146,12 @@ namespace GEO {
         Tset(t1, v3, v1, v2, index_t(-1), index_t(-1), t0);
         orient_012_ = orient2d(0,1,2);
         geo_debug_assert(is_convex_quad(t0));
-        if(incircle(v0,v1,v2,v3) == POSITIVE) {
+        if(Sign(incircle(v0,v1,v2,v3)*orient_012_) == POSITIVE) {
             swap_edge(t0);
         }
+    }
+
+    void CDTBase2d::clear_cache() {
     }
     
     index_t CDTBase2d::insert(index_t v, index_t hint) {
@@ -176,6 +183,11 @@ namespace GEO {
                 v2T_.pop_back();
                 --nv_;
             }
+            // If we cached some predicates, we need to clear the cache,
+            // because everything cached relating to latest vertex becomes
+            // invalid since the same index will be used later by another
+            // point.
+            clear_cache();
             return v;
         }
 
@@ -191,12 +203,13 @@ namespace GEO {
         // Phase 2: split triangle
         // Particular case: v is on edge
         if(nb_z == 1) {
-            CDT_LOG("vertex on edge");            
+            CDT_LOG("insert vertex on edge");            
             index_t le = (o[0] == ZERO) ? 0 :
                          (o[1] == ZERO) ? 1 :
                           2 ;
             insert_vertex_in_edge(v,t,le,S);
         } else {
+            CDT_LOG("insert vertex in triangle");            
             insert_vertex_in_triangle(v,t,S);
         }
 
@@ -206,13 +219,18 @@ namespace GEO {
             Delaunayize_vertex_neighbors(v,S);
         }
 
+#ifdef CDT_DEBUG        
+        debug_check_consistency();
+#endif        
         return v;
     }
 
     
     void CDTBase2d::insert_constraint(index_t i, index_t j) {
         CDT_LOG("insert constraint: " << i << "-" << j);
+#ifdef CDT_DEBUG        
         debug_check_consistency();
+#endif        
         ++ncnstr_;
 
         // Index of first vertex coming from constraints intersection
@@ -232,18 +250,33 @@ namespace GEO {
             // Stop at vertex on constraint or constraint intersection
             // if any (returned in k)
             index_t k = find_intersected_edges(i,j,Q);
-            
+
+            // If we found a constraint intersection,
+            // we need to Delaunayize the neigborhood
+            // of the newly created vertex. Then we
+            // need to find the intersected edges again,
+            // since they may have changed.
+            if(delaunay_ && exact_intersections_ && k >= first_v_isect) {
+                geo_debug_assert(insert(k) == k);
+                Q.clear();
+                Delaunayize_vertex_neighbors(k);
+#ifdef CDT_DEBUG                
+                debug_check_geometry();
+#endif                
+                index_t new_k = find_intersected_edges(i,j,Q);
+                geo_assert(new_k == k);
+            } 
+
             // Step 2: constrain edges
             constrain_edges(i,k,Q,N);
-            
-            debug_check_combinatorics(); // It is good to be paranoid 
             
             // Step 3: restore Delaunay condition
             if(delaunay_) {
                 Delaunayize_new_edges(N);
+#ifdef CDT_DEBUG                
+                debug_check_geometry();
+#endif                
             }
-            
-            debug_check_combinatorics(); // Still paranoid...
             
             i = k;
         }
@@ -252,48 +285,78 @@ namespace GEO {
         vector<Edge> N; // New edges to re-Delaunayize
         while(i != j) {
             index_t k = find_intersected_edges(i,j,Q);
+            
+            // If we found a constraint intersection,
+            // we need to Delaunayize the neigborhood
+            // of the newly created vertex. Then we
+            // need to find the intersected edges again,
+            // since they may have changed.
+            if(delaunay_ && exact_intersections_ && k >= first_v_isect) {
+                geo_debug_assert(insert(k) == k);
+                Q.clear();
+                Delaunayize_vertex_neighbors(k);
+#ifdef CDT_DEBUG                
+                debug_check_geometry();
+#endif                
+                index_t new_k = find_intersected_edges(i,j,Q);
+                geo_assert(new_k == k);
+            }
+            
             constrain_edges_naive(i,k,Q,N);
             debug_check_combinatorics();
             if(delaunay_) {
                 Delaunayize_new_edges_naive(N);
+#ifdef CDT_DEBUG                
+                debug_check_geometry();
+#endif                
             }
-            debug_check_combinatorics();            
+            debug_check_combinatorics();
             i = k;
         }
+#endif
+        // Delaunayize neighborhood of vertices yielded by constraint
+        // intersections now if not done before (that is, if intersections
+        // are not exact, like in the default CDT2d class). If intersections
+        // are exact, it was done before (right after creating the intersection)
+        if(delaunay_ && !exact_intersections_) {
+            for(index_t v=first_v_isect; v<nv(); ++v) {
+                Delaunayize_vertex_neighbors(v);
+            }
+        } 
+
+#ifdef CDT_DEBUG        
+        debug_check_consistency();
 #endif        
+    }
 
-        debug_check_combinatorics();
+    void CDTBase2d::Delaunayize_vertex_neighbors(index_t v) {
+        CDT_LOG("Delaunayize_vertex_neighbors " << v);
         
-        if(!delaunay_) {
-            return;
-        }
-
         // Delaunayize triangles around vertices coming from
         // constraint intersections
         DList S(*this, DLIST_S_ID);        
-        for(index_t v=first_v_isect; v<nv(); ++v) {
-            // We cannot use for_each_triangle_around_vertex()
-            // because we need to Trot() t during traveral,
-            // to have v has t's vertex 0
-            // But the good news is that v is never on the border,
-            // (because it comes from an edge *intersection*),
-            // hence traversal is easier.
-            index_t t0 = vT(v); // Need to store it, because we Trot()
-            index_t t = t0;
-            do {
-                index_t lv = Tv_find(t,v);
-                Trot(t,lv);
-                geo_debug_assert(Tv(t,0) == v);
-                S.push_back(t);
-                t = Tadj(t, 1);
-                geo_debug_assert(t != index_t(-1));
-            } while(t != t0);            
-            Delaunayize_vertex_neighbors(v,S);
-        }
 
-        debug_check_consistency();        
+        geo_assert(vT(v) != index_t(-1));
+        
+        // We cannot use for_each_triangle_around_vertex()
+        // because we need to Trot() t during traveral,
+        // to have v has t's vertex 0
+        // But the good news is that v is never on the border,
+        // (because it comes from an edge *intersection*),
+        // hence traversal is easier.
+        index_t t0 = vT(v); // Need to store it, because we Trot()
+        index_t t = t0;
+        do {
+            index_t lv = Tv_find(t,v);
+            Trot(t,lv);
+            geo_debug_assert(Tv(t,0) == v);
+            S.push_back(t);
+            t = Tadj(t, 1);
+            geo_assert(t != index_t(-1));
+        } while(t != t0);            
+        Delaunayize_vertex_neighbors(v,S);
     }
-
+    
     /**
      * \brief Used by the implementation of find_intersected_edges()
      * \details During traversal of a constrained edge [i,j], we can be on
@@ -309,12 +372,14 @@ namespace GEO {
         CDT2d_ConstraintWalker(index_t i_in, index_t j_in) :
             i(i_in), j(j_in),
             t_prev(index_t(-1)), v_prev(index_t(-1)),
-            t(index_t(-1)), v(i_in)
+            t(index_t(-1)), v(i_in),
+            v_cnstr(index_t(-1))
             {
             }
         index_t i, j;
         index_t t_prev, v_prev;
         index_t t, v;
+        index_t v_cnstr;
     };
     
     index_t CDTBase2d::find_intersected_edges(index_t i, index_t j, DList& Q) {
@@ -459,6 +524,11 @@ namespace GEO {
                             Tedge_cnstr(W.t,0), v1, v2
                         );
                         insert_vertex_in_edge(v_next,W.t,0);
+                        // Mark new edge as constraint if walker was previously
+                        // on a vertex.
+                        if(W.v_prev != index_t(-1)) {
+                            Tset_edge_cnstr_with_neighbor(W.t,2,ncnstr_-1);
+                        }
                     } else {
                         CDT_LOG("   Isect: t=" << W.t <<" E=" << v1 <<"-"<< v2);
                         Q.push_back(W.t);
@@ -520,7 +590,7 @@ namespace GEO {
             index_t t1 = Q.pop_back();
             if(!is_convex_quad(t1)) {
                 // Sanity check: if the only remaining edge to flip does
-                // not form a convexdd quad, it means we are going to
+                // not form a convex quad, it means we are going to
                 // flip forever ! (shoud not happen)
                 geo_assert(!Q.empty());
                 Q.push_front(t1);
@@ -571,7 +641,19 @@ namespace GEO {
     }
 
     void CDTBase2d::Delaunayize_vertex_neighbors(index_t v, DList& S) {
+        CDT_LOG("Delaunayize_vertex_neighbors"); 
+        index_t count = 0;
         while(!S.empty()) {
+            // NASA programming style: all loops have
+            // a maximum number of iterations
+            ++count;
+            if(count > 10*nT()) {
+                Logger::warn("CDT2d")
+                    << "Emergency exit in Delaunayize_vertex_neighbors()"
+                    << std::endl;
+                S.clear();
+                geo_assert_not_reached; // For now, assert fail.
+            }
             index_t t1 = S.pop_back();
             geo_debug_assert(Tv(t1,0) == v);
             if(Tedge_is_constrained(t1,0)) {
@@ -584,21 +666,34 @@ namespace GEO {
             if(!exact_incircle_ && !is_convex_quad(t1)) {
                 continue;
             }
+
             index_t v1 = Tv(t2,0);
             index_t v2 = Tv(t2,1);
             index_t v3 = Tv(t2,2);
-            if(incircle(v1,v2,v3,v) == POSITIVE) {
+            if(Sign(incircle(v1,v2,v3,v)*orient_012_) == POSITIVE) {
                 swap_edge(t1);
                 S.push_back(t1);
                 S.push_back(t2);                    
             }
         }
+        CDT_LOG("/Delaunayize_vertex_neighbors"); 
     }
     
     void CDTBase2d::Delaunayize_new_edges(DList& N) {
+        index_t count = 0;
         bool swap_occured = true;
         while(swap_occured) {
             swap_occured = false;
+            // NASA programming style: all loops have
+            // a maximum number of iterations
+            ++count;
+            if(count > 10*nT()) {
+                Logger::warn("CDT2d")
+                    << "Emergency exit in Delaunayize_new_edges()"
+                    << std::endl;
+                geo_assert_not_reached; // For now, assert fail
+                break;
+            }
             for(index_t t1 = N.front(); t1 != index_t(-1); t1 = N.next(t1)) {
                 if(Tedge_is_constrained(t1,0)) {
                     continue;
@@ -615,7 +710,7 @@ namespace GEO {
                 }
                 index_t e2 = Tadj_find(t2,t1);
                 index_t v3 = Tv(t2,e2);
-                if(incircle(v0,v1,v2,v3) == POSITIVE) {
+                if(Sign(incircle(v0,v1,v2,v3)*orient_012_) == POSITIVE) {
                     // t2 may also encode a new edge, we need to preserve it,
                     // by chosing the right swap:
                     if(Tv(t2,0) == Tv(t1,1)) {
@@ -817,6 +912,7 @@ namespace GEO {
         index_t t1_adj2 = Tadj(t1,(le1+1)%3);
         index_t t1_adj3 = Tadj(t1,(le1+2)%3);
         if(t2 != index_t(-1)) {
+            CDT_LOG("  insert vertex in internal edge");
             // New vertex is on an edge of t1 and t1 has a neighbor
             // accross that edge. Discard the two triangles t1 and t2
             // adjacent to the edge, and create four new triangles
@@ -848,6 +944,7 @@ namespace GEO {
                 S.push_back(t4);                
             }
         } else {
+            CDT_LOG("  insert vertex in border edge");            
             // New vertex is on an edge of t1 and t1 has no neighbor
             // accross that edge. Discard t1 and replace it with two
             // new triangles (recycle t1).
@@ -860,7 +957,7 @@ namespace GEO {
             Tset_edge_cnstr(t2,2,cnstr);
             if(S.initialized()) {
                 S.push_back(t1);
-                S.push_back(t2);
+                S.push_back(t2);                
             }
         }
     }
@@ -948,6 +1045,17 @@ namespace GEO {
 
     /**  Debugging ******************************************************/
 
+    void CDTBase2d::check_geometry() const {
+        if(delaunay_ && exact_incircle_) { 
+            for(index_t t=0; t<nT(); ++t) {
+                for(index_t le=0; le<3; ++le) {
+                    geo_assert(Tedge_is_Delaunay(t,le));
+                }
+            }
+        }
+    }
+    
+    
     bool CDTBase2d::Tedge_is_Delaunay(index_t t1, index_t le1) const {
         if(Tedge_is_constrained(t1,le1)) {
             return true;
@@ -961,7 +1069,18 @@ namespace GEO {
         index_t v2 = Tv(t1,(le1+1)%3);
         index_t v3 = Tv(t1,(le1+2)%3);
         index_t v4 = Tv(t2,le2);
-        return incircle(v1,v2,v3,v4) <= 0;
+
+        // If we do not check that, we assert fail 
+        // whenever there is a vertex inserted in
+        // the macroborder of the triangle
+        if(
+            orient2d(v1,v4,v3) != orient_012_ ||
+            orient2d(v4,v1,v2) != orient_012_
+        ) {
+            return true;
+        }
+        
+        return Sign(incircle(v1,v2,v3,v4)*orient_012_) <= 0;
     }
 
     void CDTBase2d::check_edge_intersections(
@@ -1010,6 +1129,7 @@ namespace GEO {
     }
     
     void CDTBase2d::Delaunayize_new_edges_naive(vector<Edge>& N) {
+        CDT_LOG("Delaunayize_new_edges_naive()");
         for(Edge E: N) {
             index_t v1 = std::min(E.first,E.second);
             index_t v2 = std::max(E.first,E.second);
@@ -1018,8 +1138,19 @@ namespace GEO {
             }
             CDT_LOG("new edge: " << v1 << " " << v2);
         }
+        index_t count = 0;
         bool swap_occured = true;
         while(swap_occured) {
+            // NASA programming style: all loops have
+            // a maximum number of iterations
+            ++count;
+            if(count > 10*nT()) {
+                Logger::warn("CDT2d")
+                    << "Emergency exit in Delaunayize_new_edges_naive()"
+                    << std::endl;
+                geo_assert_not_reached; // For now, assert fail
+                return;
+            }
             swap_occured = false;
             for(Edge& E: N) {
                 index_t t1 = eT(E);
@@ -1035,7 +1166,13 @@ namespace GEO {
                 }
                 index_t e2 = Tadj_find(t2,t1);
                 index_t v3 = Tv(t2,e2);
-                if(incircle(v0,v1,v2,v3) == POSITIVE) {
+                if(!exact_incircle_ && !is_convex_quad(t1)) {
+                    continue;
+                }
+                if(Sign(incircle(v0,v1,v2,v3)*orient_012_) == POSITIVE) {
+                    CDT_LOG("swap " << v1 << " " << v2
+                                    << "  --->  "
+                                    << v0 << " " << v3 );
                     swap_edge(t1);
                     E = std::make_pair(Tv(t1,0), Tv(t1,1));
                     swap_occured = true;
@@ -1043,8 +1180,9 @@ namespace GEO {
             }
         }
         N.resize(0);
+        CDT_LOG("/Delaunayize_new_edges_naive()");
     }
-    
+
     void CDTBase2d::constrain_edges_naive(
         index_t i, index_t j, DList& Q_in, vector<Edge>& N
     ) {
@@ -1092,6 +1230,8 @@ namespace GEO {
     /********************************************************************/
 
     CDT2d::CDT2d() {
+        exact_intersections_ = false;
+        exact_incircle_ = false;
     }
     
     CDT2d::~CDT2d() {
@@ -1237,7 +1377,7 @@ namespace GEO {
             }
         }
         CDT_LOG("Inserted.");
-        debug_check_consistency();        
+        debug_check_consistency(); 
     }
 
     void CDT2d::save(const std::string& filename) const {

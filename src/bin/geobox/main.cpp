@@ -42,7 +42,7 @@
 #include <geogram/mesh/mesh_repair.h>
 #include <geogram/mesh/mesh_fill_holes.h>
 #include <geogram/mesh/mesh_degree3_vertices.h>
-#include <geogram/mesh/mesh_intersection.h>
+#include <geogram/mesh/mesh_surface_intersection.h>
 #include <geogram/mesh/mesh_geometry.h>
 #include <geogram/mesh/mesh_preprocessing.h>
 #include <geogram/mesh/mesh_remesh.h>
@@ -346,7 +346,7 @@ namespace {
             ImGui::Separator();            
             if(ImGui::BeginMenu(icon_UTF8("info") + " About...")) {
                 ImGui::Text(
-                    "             GEObox\n"
+                    "                           GEObox\n"
                     "  The geometry processing toolbox\n"
                     "\n"
                     );
@@ -361,12 +361,9 @@ namespace {
                 ImGui::Text(
                     "\n"
                     "With algorithms from:\n"
-                    "\n"
-                    "* ERC StG GOODSHAPE (ERC-StG-205693) \n"
-                    "* ERC PoC VORPALINE (ERC-PoC-334829) \n"
-                    "\n"
+                    "* ERC StG GOODSHAPE (StG-205693)\n"
+                    "* ERC PoC VORPALINE (PoC-334829)\n"
                     "  ...as well as new ones.\n"
-                    "\n"
                 );
                 ImGui::Separator();
                 ImGui::Text(
@@ -376,11 +373,10 @@ namespace {
                     "To get a (faster!) native executable\n"
                     "and the sources, see:"
 #endif
-                    "\n"
-                    "       (C)opyright 2006-2016\n"
-                    "      The ALICE project, Inria\n"
+                    "       (C)opyright 2006-2023\n"
+                    "                       Inria\n"
                 );
-                ImGui::Text("\n");
+//              ImGui::Text("\n");
                 ImGui::Separator();
                 ImGui::Text(
                     "%s",
@@ -475,7 +471,7 @@ namespace {
                     );
 		}
 
-		if(ImGui::MenuItem("keep largest component")) {
+		if(ImGui::MenuItem("keep largest part")) {
 		    GEO::Command::set_current(
 			"void keep_largest_component( "
 			"    bool are_you_sure=true   "
@@ -528,6 +524,7 @@ namespace {
                 if(ImGui::MenuItem("make texture atlas")) {
 		    Command::set_current(
  	    "void make_texture_atlas("
+            "   bool detect_sharp_edges=false [detect sharp edges],"
   	    "   bool use_ABF=false [use angle-based flattening],"
 	    "   bool use_XATLAS=true [use XATLAS packer]"
 	    ") [generates UV coordinates]",
@@ -535,7 +532,7 @@ namespace {
 		    );
 		}
 
-                if(ImGui::MenuItem("remesh and bake normals")) {
+                if(ImGui::MenuItem("remesh + normal map")) {
 		    Command::set_current(
  	    "void remesh_with_normal_map("
   	    "   index_t nb_vertices=5000 [desired number of vertices],"
@@ -649,7 +646,7 @@ namespace {
             }
 
             if(ImGui::BeginMenu("Attributes")) {
-                if(ImGui::MenuItem("compute LFS")) {
+                if(ImGui::MenuItem("local feature size")) {
                     Command::set_current(
                         "compute_local_feature_size(   "
 			"    std::string attribute_name=\"LFS\""
@@ -657,7 +654,7 @@ namespace {
                         this, &GeoBoxApplication::compute_local_feature_size
                     );
                 }
-                if(ImGui::MenuItem("compute dist. to brdr")) {
+                if(ImGui::MenuItem("dist. to border")) {
                     Command::set_current(
                         "compute_distance_to_border( "
 			"    std::string attribute_name=\"distance\""
@@ -665,7 +662,7 @@ namespace {
                         this, &GeoBoxApplication::compute_distance_to_border
                     );
                 }
-                if(ImGui::MenuItem("compute ambient occl.")) {
+                if(ImGui::MenuItem("ambient occlusion")) {
                     Command::set_current(
                         "compute_ambient_occlusion( "
 			"    std::string attribute_name=\"AO\","
@@ -676,7 +673,7 @@ namespace {
                     );
                 }
 
-                if(ImGui::MenuItem("compute manifold harmonics")) {
+                if(ImGui::MenuItem("manifold harmonics")) {
                     Command::set_current(
                         "compute_manifold_harmonics( "
 			"    std::string attribute_name=\"MH\","
@@ -1229,6 +1226,7 @@ namespace {
         }
 
 	void make_texture_atlas(
+            bool detect_sharp_edges=false,
 	    bool use_ABF=false,  
 	    bool use_XATLAS=true
 	) {
@@ -1242,7 +1240,7 @@ namespace {
 
 	    mesh_make_atlas(
 		mesh_,
-		45.0 * M_PI / 180.0,
+		detect_sharp_edges ? 45.0 : 360.0,
 		use_ABF    ? PARAM_ABF   : PARAM_LSCM,
 		use_XATLAS ? PACK_XATLAS : PACK_TETRIS,
 		false // set to true to enable verbose messages
@@ -1293,7 +1291,7 @@ namespace {
 	    // Step 2: compute UVs in low-resolution mesh (M)
 	    mesh_make_atlas(
 		M,
-		45.0 * M_PI / 180.0,
+		360.0, // Do not detect sharp edges
 		PARAM_LSCM,
 		PACK_XATLAS,
 		false // verbose
@@ -1599,7 +1597,7 @@ namespace {
 	    
 	    end();
             set_attribute("vertices." + attribute_name);
-	    current_colormap_texture_ = colormaps_[1].texture; // graylevel
+	    current_colormap_index_ = 1; // graylevel
 	    lighting_ = false;
 	    show_mesh_ = false;
             show_attributes();
@@ -1619,7 +1617,7 @@ namespace {
 		attribute_name +
 		"[" + String::to_string(nb_harmonics-1) + "]"
 	    );
-	    current_colormap_texture_ = colormaps_[5].texture;
+	    current_colormap_index_ = 5;
 	    lighting_ = false;
 	    show_mesh_ = false;
 	    show_attributes();
@@ -1823,6 +1821,13 @@ namespace {
 	    }
 	    
 	    if(has_UVs() && texture_mode_ != NO_TEXTURE) {
+                if(
+                    texture_mode_ != UV_GRID &&
+                    texture_ == 0 &&
+                    !texture_image_.is_null()
+                ) {
+                    update_texture_from_image();
+                }
 		bool use_uv_grid =
 		    (texture_mode_ == UV_GRID) || (texture_ == 0);
 		if(!use_uv_grid && texture_mode_ == NORMAL_MAP) {

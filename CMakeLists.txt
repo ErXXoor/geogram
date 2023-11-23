@@ -9,7 +9,7 @@ cmake_policy(SET CMP0048 NEW)
 set(VORPALINE_VERSION_RC TRUE)
 set(VORPALINE_VERSION_MAJOR 1)
 set(VORPALINE_VERSION_MINOR 8)
-set(VORPALINE_VERSION_PATCH 4)
+set(VORPALINE_VERSION_PATCH 6)
 
 set(VORPALINE_VERSION_PLAIN ${VORPALINE_VERSION_MAJOR}.${VORPALINE_VERSION_MINOR}.${VORPALINE_VERSION_PATCH})
 if(VORPALINE_VERSION_RC)
@@ -41,7 +41,6 @@ if(NOT GEOGRAM_SUB_BUILD)
    option(GEOGRAM_WITH_HLBFGS "Non-linear solver (Yang Liu's HLBFGS)" ON)
    option(GEOGRAM_WITH_TETGEN "Tetrahedral mesher (Hang Si's TetGen)" ON)
    option(GEOGRAM_WITH_TRIANGLE "Triangle mesher (Jonathan Shewchuk's triangle)" ON)
-   option(GEOGRAM_WITH_EXPLORAGRAM "Experimental code (hexahedral meshing pipeline and optimal transport)" ON)
    option(GEOGRAM_WITH_LUA "Built-in LUA interpreter" ON)
    option(GEOGRAM_LIB_ONLY "Libraries only (no example programs/no viewer)" OFF)
    option(GEOGRAM_WITH_FPG "Predicate generator (Sylvain Pion's FPG)" OFF)
@@ -51,6 +50,16 @@ if(NOT GEOGRAM_SUB_BUILD)
 endif()
 
 include(cmake/geogram.cmake)
+
+# Override default CMAKE_INSTALL_DOCDIR: Use doc instead of CMake default DATAROOTDIR/doc/PROJECT_NAME
+set(CMAKE_INSTALL_DOCDIR doc CACHE PATH "Documentation root")
+
+# Set remaining CMAKE_INSTALL_...DIR variables
+include(GNUInstallDirs)
+
+# Install destinations for pkg-config and CMake files
+set(GEOGRAM_INSTALL_PKGCONFIG_DIR ${CMAKE_INSTALL_LIBDIR}/pkgconfig CACHE PATH "pkg-config file install destination")
+set(GEOGRAM_INSTALL_CMAKE_DIR ${CMAKE_INSTALL_LIBDIR}/cmake/modules CACHE PATH "CMake file install destination")
 
 
 set(VORPALINE_INCLUDE_SUBPATH geogram${VORPALINE_VERSION_MAJOR})
@@ -145,7 +154,7 @@ file(REMOVE ${CMAKE_BINARY_DIR}/doc/LICENSE.txt)
 
 # FindGeogram.cmake
 
-install(FILES cmake/FindGeogram.cmake DESTINATION lib/cmake/modules COMPONENT devkit)
+install(FILES cmake/FindGeogram.cmake DESTINATION ${GEOGRAM_INSTALL_CMAKE_DIR} COMPONENT devkit)
 
 # Configure CPack
 
@@ -216,4 +225,5 @@ configure_file(
 
 # This must always be last!
 include(CPack)
+
 

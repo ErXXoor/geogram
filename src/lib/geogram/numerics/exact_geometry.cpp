@@ -38,124 +38,16 @@
  */
 
 #include <geogram/numerics/exact_geometry.h>
-
-namespace {
-    using namespace GEO;
-    /**
-     * \brief Compares two rational numbers given as separate
-     *   numerators and denominators.
-     * \param[in] a_num , a_denom defines a = \p a_num / \p a_denom
-     * \param[in] b_num , b_denom defines b = \p b_num / \p b_denom
-     * \return the sign of a - b
-     */
-    inline Sign ratio_compare(
-        const expansion_nt& a_num,
-        const expansion_nt& a_denom,
-        const expansion_nt& b_num,
-        const expansion_nt& b_denom
-    ) {
-	if(a_denom == b_denom) {
-	    const expansion& diff_num = expansion_diff(
-		a_num.rep(), b_num.rep()
-	    );
-	    return Sign(diff_num.sign() * a_denom.sign());
-	}
-	const expansion& num_a = expansion_product(
-	    a_num.rep(), b_denom.rep()
-	);
-	const expansion& num_b = expansion_product(
-	    b_num.rep(), a_denom.rep()
-	);
-	const expansion& diff_num = expansion_diff(num_a, num_b);
-	return Sign(
-	    diff_num.sign() * a_denom.sign() * b_denom.sign()
-	);
-    }
-}
+#include <geogram/numerics/interval_nt.h>
+#include <geogram/numerics/predicates.h>
+#include <geogram/numerics/SOS.h>
+#include <geogram/basic/logger.h>
 
 namespace GEO {
-    
-    vec2HE operator-(const vec2HE& p1, const vec2HE& p2) {
-        if(p1.w == p2.w) {
-            return vec2HE(
-                expansion_nt(expansion_nt::DIFF, p2.x.rep(), p1.x.rep()),
-                expansion_nt(expansion_nt::DIFF, p2.y.rep(), p1.y.rep()),
-                p1.w
-            );
-        }
-        expansion& x1 = expansion_product(p1.x.rep(), p2.w.rep());
-        expansion& y1 = expansion_product(p1.y.rep(), p2.w.rep());        
-        expansion& x2 = expansion_product(p2.x.rep(), p1.w.rep());
-        expansion& y2 = expansion_product(p2.y.rep(), p1.w.rep());
-        return vec2HE(
-            expansion_nt(expansion_nt::DIFF, x2, x1),
-            expansion_nt(expansion_nt::DIFF, y2, y1),
-            expansion_nt(expansion_nt::PRODUCT, p1.w.rep(), p2.w.rep())
-        );
-    }
-    
-    vec3HE operator-(const vec3HE& p1, const vec3HE& p2) {
-        if(p1.w == p2.w) {
-            return vec3HE(
-                expansion_nt(expansion_nt::DIFF, p2.x.rep(), p1.x.rep()),
-                expansion_nt(expansion_nt::DIFF, p2.y.rep(), p1.y.rep()),
-                expansion_nt(expansion_nt::DIFF, p2.z.rep(), p1.z.rep()),
-                p1.w
-            );
-        }
-        expansion& x1 = expansion_product(p1.x.rep(), p2.w.rep());
-        expansion& y1 = expansion_product(p1.y.rep(), p2.w.rep());
-        expansion& z1 = expansion_product(p1.z.rep(), p2.w.rep());   
-        expansion& x2 = expansion_product(p2.x.rep(), p1.w.rep());
-        expansion& y2 = expansion_product(p2.y.rep(), p1.w.rep());
-        expansion& z2 = expansion_product(p2.z.rep(), p1.w.rep());
-        return vec3HE(
-            expansion_nt(expansion_nt::DIFF, x2, x1),
-            expansion_nt(expansion_nt::DIFF, y2, y1),
-            expansion_nt(expansion_nt::DIFF, z2, z1),            
-            expansion_nt(expansion_nt::PRODUCT, p1.w.rep(), p2.w.rep())
-        );
-    }
 
-    bool vec2HELexicoCompare::operator()(
-        const vec2HE& v1, const vec2HE& v2
-    ) const {
-        Sign s = ratio_compare(v2.x, v2.w, v1.x, v1.w);
-        if(s == POSITIVE) {
-            return true;
-        }
-        if(s == NEGATIVE) {
-            return false;
-        }
-        s = ratio_compare(v2.y, v2.w, v1.y, v1.w);
-        return (s == POSITIVE);
-    }
-    
-    bool vec3HELexicoCompare::operator()(
-        const vec3HE& v1, const vec3HE& v2
-    ) const {
-        Sign s = ratio_compare(v2.x, v2.w, v1.x, v1.w);
-        if(s == POSITIVE) {
-            return true;
-        }
-        if(s == NEGATIVE) {
-            return false;
-        }
-
-        s = ratio_compare(v2.y, v2.w, v1.y, v1.w);
-        if(s == POSITIVE) {
-            return true;
-        }
-        if(s == NEGATIVE) {
-            return false;
-        }
-        
-        s = ratio_compare(v2.z, v2.w, v1.z, v1.w);
-        return (s == POSITIVE);
-    }
-            
-
-    vec3HE mix(const rational_nt& t, const vec3& p1, const vec3& p2) {
+    template<> vec3Hg<expansion_nt> mix(
+        const rationalg<expansion_nt>& t, const vec3& p1, const vec3& p2
+    ) {
         expansion& st_d = const_cast<expansion&>(t.denom().rep());
         st_d.optimize();
         expansion& t_n  = const_cast<expansion&>(t.num().rep());
@@ -175,7 +67,9 @@ namespace GEO {
         );
     }
 
-    vec2HE mix(const rational_nt& t, const vec2& p1, const vec2& p2) {
+    template<> vec2Hg<expansion_nt> mix(
+        const rationalg<expansion_nt>& t, const vec2& p1, const vec2& p2
+    ) {
         expansion& st_d = const_cast<expansion&>(t.denom().rep());
         st_d.optimize();
         expansion& t_n  = const_cast<expansion&>(t.num().rep());
@@ -192,7 +86,10 @@ namespace GEO {
         );
     }
     
-    vec2HE mix(const rational_nt& t, const vec2HE& p1, const vec2HE& p2) {
+    template<> vec2Hg<expansion_nt> mix(
+        const rationalg<expansion_nt>& t,
+        const vec2Hg<expansion_nt>& p1, const vec2Hg<expansion_nt>& p2
+    ) {
         expansion& st_d = expansion_product(t.denom().rep(),p1.w.rep());
         st_d.optimize();
         expansion& t_n  = const_cast<expansion&>(t.num().rep());
@@ -224,7 +121,10 @@ namespace GEO {
         );
     }
 
-    vec3HE mix(const rational_nt& t, const vec3HE& p1, const vec3HE& p2) {
+    template <class T> vec3Hg<expansion_nt> mix(
+        const rationalg<expansion_nt>& t,
+        const vec3Hg<expansion_nt>& p1, const vec3Hg<expansion_nt>& p2
+    ) {
         expansion& st_d = expansion_product(t.denom().rep(),p1.w.rep());
         st_d.optimize();
         expansion& t_n  = const_cast<expansion&>(t.num().rep());
@@ -261,7 +161,7 @@ namespace GEO {
             expansion_nt(st_d_2)
         );
     }
-
+    
     template<> expansion_nt det(const vec2E& v1, const vec2E& v2) {
         expansion* result = expansion::new_expansion_on_heap(
             expansion::det2x2_capacity(
@@ -315,24 +215,25 @@ namespace GEO {
     
     namespace PCK {
 
-        bool same_point(const vec2HE& v1, const vec2HE& v2) {
-            return (
-                ratio_compare(v1.x, v1.w, v2.x, v2.w) == ZERO &&
-                ratio_compare(v1.y, v1.w, v2.y, v2.w) == ZERO
-            );
-        }
-
-        bool same_point(const vec3HE& v1, const vec3HE& v2) {
-            return (
-                ratio_compare(v1.x, v1.w, v2.x, v2.w) == ZERO &&
-                ratio_compare(v1.y, v1.w, v2.y, v2.w) == ZERO &&
-                ratio_compare(v1.z, v1.w, v2.z, v2.w) == ZERO 
-            );
-        }
-        
         Sign orient_2d(
             const vec2HE& p0, const vec2HE& p1, const vec2HE& p2
         ) {
+            // Filter, using interval arithmetics
+            { 
+                interval_nt::Rounding rounding;
+                interval_nt Delta = det3x3(
+                    interval_nt(p0.x),interval_nt(p0.y),interval_nt(p0.w),
+                    interval_nt(p1.x),interval_nt(p1.y),interval_nt(p1.w),
+                    interval_nt(p2.x),interval_nt(p2.y),interval_nt(p2.w)
+                );
+                interval_nt::Sign2 s = Delta.sign();
+                if(interval_nt::sign_is_determined(s)) {
+                    return Sign(
+                        interval_nt::convert_sign(s)*
+                        p0.w.sign()*p1.w.sign()*p2.w.sign()
+                    );
+                }
+            }
             const expansion& Delta = expansion_det3x3(
                 p0.x.rep(), p0.y.rep(), p0.w.rep(),
                 p1.x.rep(), p1.y.rep(), p1.w.rep(),
@@ -346,26 +247,125 @@ namespace GEO {
             );
         }
 
-        Sign GEOGRAM_API orient_2d_projected(
+
+        PCK_STAT(Numeric::uint64 orient3dHE_calls = 0;)
+        PCK_STAT(Numeric::uint64 orient3dHE_filter_success = 0;)
+        
+        Sign orient_3d(
+            const vec3HE& p0, const vec3HE& p1,
+            const vec3HE& p2, const vec3HE& p3
+        ) {
+            PCK_STAT(++orient3dHE_calls;)
+
+            // Filter
+            {
+                vec3HI p0I(p0);
+                vec3HI U = vec3HI(p1)-p0I;
+                vec3HI V = vec3HI(p2)-p0I;
+                vec3HI W = vec3HI(p3)-p0I;
+                interval_nt::Sign2 s1 = U.w.sign();
+                interval_nt::Sign2 s2 = V.w.sign();
+                interval_nt::Sign2 s3 = W.w.sign();
+                if(
+                    interval_nt::sign_is_non_zero(s1) &&
+                    interval_nt::sign_is_non_zero(s2) &&
+                    interval_nt::sign_is_non_zero(s3) 
+                ) {
+                    interval_nt Delta = det3x3(
+                        U.x, U.y, U.z,
+                        V.x, V.y, V.z,
+                        W.x, W.y, W.z                
+                    );
+                    interval_nt::Sign2 s = Delta.sign();
+                    if(interval_nt::sign_is_non_zero(s)) {
+                        PCK_STAT(++orient3dHE_filter_success;)
+                        return Sign(
+                            interval_nt::convert_sign(s)*
+                            interval_nt::convert_sign(s1)*
+                            interval_nt::convert_sign(s2)*
+                            interval_nt::convert_sign(s3)
+                        );
+                    }
+                }
+            }
+            
+            vec3HE U = p1-p0;
+            vec3HE V = p2-p0;
+            vec3HE W = p3-p0;
+
+            // Here we do not use expansion_det3x3() (that
+            // allocates on the stack), because
+            // RadialSort uses generted points that
+            // can have very looonng expansions that
+            // can cause stack overflow.
+            expansion_nt Delta = det3x3(
+                U.x, U.y, U.z,
+                V.x, V.y, V.z,
+                W.x, W.y, W.z                
+            );
+                
+            Sign result = Sign(
+                Delta.sign()*
+                U.w.rep().sign()*
+                V.w.rep().sign()*
+                W.w.rep().sign()
+            );
+            
+            return result;
+        }
+
+
+        PCK_STAT(Numeric::uint64 proj_orient2d_calls = 0;)
+        PCK_STAT(Numeric::uint64 proj_orient2d_filter_success = 0;)
+
+        
+        Sign orient_2d_projected(
             const vec3HE& p0, const vec3HE& p1, const vec3HE& p2,
             coord_index_t axis
         ) {
             coord_index_t u = coord_index_t((axis+1)%3);
             coord_index_t v = coord_index_t((axis+2)%3);
-            const expansion& Delta = expansion_det3x3(
-                p0[u].rep(), p0[v].rep(), p0.w.rep(),
-                p1[u].rep(), p1[v].rep(), p1.w.rep(),
-                p2[u].rep(), p2[v].rep(), p2.w.rep()
-            );
-            return Sign(
-                Delta.sign()*
-                p0.w.rep().sign()*
-                p1.w.rep().sign()*
-                p2.w.rep().sign()
-            );
+
+
+            PCK_STAT(++proj_orient2d_calls;)
+
+            // Filter, using interval arithmetics
+            { 
+                interval_nt::Rounding rounding;
+
+                interval_nt Delta = det3x3(
+                    interval_nt(p0[u]),interval_nt(p0[v]),interval_nt(p0.w),
+                    interval_nt(p1[u]),interval_nt(p1[v]),interval_nt(p1.w),
+                    interval_nt(p2[u]),interval_nt(p2[v]),interval_nt(p2.w)
+                );
+                interval_nt::Sign2 s = Delta.sign();
+                if(interval_nt::sign_is_determined(s)) {
+                    return Sign(
+                        interval_nt::convert_sign(s)*
+                        p0.w.sign()*p1.w.sign()*p2.w.sign()
+                    );
+                }
+            }
+
+            Sign result = ZERO;
+            {
+                const expansion& Delta = expansion_det3x3(
+                    p0[u].rep(), p0[v].rep(), p0.w.rep(),
+                    p1[u].rep(), p1[v].rep(), p1.w.rep(),
+                    p2[u].rep(), p2[v].rep(), p2.w.rep()
+                );
+                result = Sign(
+                    Delta.sign()*
+                    p0.w.rep().sign()*
+                    p1.w.rep().sign()*
+                    p2.w.rep().sign()
+                );
+            }
+            return result;
         }
-        
+
         Sign dot_2d(const vec2HE& p0, const vec2HE& p1, const vec2HE& p2) {
+            // TODO: filter
             vec2HE U = p1 - p0;
             vec2HE V = p2 - p0;
             const expansion& x1x2 = expansion_product(U.x.rep(), V.x.rep());
@@ -374,168 +374,237 @@ namespace GEO {
             return Sign(S.sign()*U.w.sign()*V.w.sign());
         }
 
-        Sign orient_2dlifted_SOS(
+/******************************************************************************/
+
+        void orient_2d_projected_stats() {
+#ifdef PCK_STATS
+            Logger::out("PCK") << "Plain orient2d:" << std::endl;            
+            Logger::out("PCK")
+                << proj_orient2d_calls << " proj orient2d calls" << std::endl;
+            Logger::out("PCK")
+                << proj_orient2d_filter_success
+                << " proj orient2d filter success" << std::endl;
+            Logger::out("PCK")
+                << 100.0 * double(proj_orient2d_filter_success) /
+                           double(proj_orient2d_calls)
+                << "% filter success"  << std::endl;
+            Logger::out("PCK") << "orient3dHE:" << std::endl;
+            Logger::out("PCK") << orient3dHE_calls
+                               << " orient3dHE calls" << std::endl;
+            Logger::out("PCK") << orient3dHE_filter_success
+                               << " orient3dHE filter success" << std::endl;
+            Logger::out("PCK") << 100.0 *
+                                  double(orient3dHE_filter_success) /
+                                  double(orient3dHE_calls)
+                               << "% filter success" << std::endl;
+#endif    
+        }
+
+/*****************************************************************************/
+
+        /**
+         * \brief Computes the sign of 
+         *   det3x3(x1,y1,1,x2,y2,1,x3,y3,1)
+         * \param[in] p1 , p2 , p3 the three points in 
+         *   homogeneous exact coordiates
+         * \return the sign of the determinant
+         */
+        static inline Sign det3_111_sign(
+            const vec2HE& p1,
+            const vec2HE& p2,
+            const vec2HE& p3
+        ) {
+            expansion_nt m1 = det2x2(p2.x, p2.y, p3.x, p3.y);
+            expansion_nt m2 = det2x2(p1.x, p1.y, p3.x, p3.y);
+            expansion_nt m3 = det2x2(p1.x, p1.y, p2.x, p2.y);
+            m1.optimize(); m2.optimize(); m3.optimize();
+            expansion_nt D = p1.w*m1-p2.w*m2+p3.w*m3 ;
+            return Sign(p1.w.sign()*p2.w.sign()*p3.w.sign()*D.sign());
+        }
+
+        Sign incircle_2d_SOS_with_lengths(
             const vec2HE& p0, const vec2HE& p1,
             const vec2HE& p2, const vec2HE& p3,
-            double h0, double h1, double h2, double h3
+            double l0, double l1, double l2, double l3
         ) {
-            expansion_nt a13(expansion_nt::DIFF, h0, h1);
-            expansion_nt a23(expansion_nt::DIFF, h0, h2);
-            expansion_nt a33(expansion_nt::DIFF, h0, h3);                
-                
-            vec2HE U1 = p1-p0;
-            U1.optimize();
-            const expansion_nt& w1 = U1.w;
-            Sign sw1 = w1.sign();
-            
-            vec2HE U2 = p2-p0;
-            U2.optimize();
-            const expansion_nt& w2 = U2.w;
-            Sign sw2 = w2.sign();
+            Sign result = ZERO;
 
-            vec2HE U3 = p3-p0;
-            U3.optimize();
-            const expansion_nt& w3 = U3.w;
-            Sign sw3 = w3.sign();                
+            // "Documentation is a love letter that you write to your
+            //  future self." - Damian Conway  (or that you write to the
+            //  poor guy who will have one day to dive again in this stuff,
+            //  but it's probably me anyway)
+            //
+            // Determinant to compute:
+            // | x0 y0 l0 1 |
+            // | x1 y1 l1 1 |
+            // | x2 y2 l2 1 |
+            // | x3 y3 l3 1 |
+            // where li = xi^2 + yi^2
+            // (positive if (p0,p1,p2) counterclockwise and p3 in circumcircle
+            //  of (p0,p1,p2)). Sign changes if (p0,p1,p2) is clockwise). 
+            // We suppose that the li's are *given* numbers (it is like
+            // perturbating a regular (weighted) triangulation instead of a
+            // Delaunay triangulation).
+            // It allows to use arithmetic expansions without
+            // overflowing/underflowing too soon.
+            //
+            // Subtract last row to first three rows
+            // (does not change determinant):
+            //
+            // | x0-x3 y0-y3 l0-l3 0 |
+            // | x1-x3 y1-y3 l1-l3 0 |
+            // | x2-x3 y2-y3 l2-l3 0 |            
+            // | x3    y3    l3    1 |
+            //
+            // Develop along last column:
+            // | x0-x3 y0-y3 l0-l3 |
+            // | x1-x3 y1-y3 l1-l3 |
+            // | x2-x3 y2-y3 l2-l3 |            
+            //
+            // let (Xi+1,Yi+1,Wi+1) = (xi,yi)-(x3,y3) in homogeneous coordinates
+            // let Li+1 = li-l3:
+            // | X1/W1 Y1/W1 L1 |
+            // | X2/W2 Y2/W2 L2 |
+            // | X3/W3 Y3/W3 L3 |
+            //
+            // Develop along last column, factor-out the Wi's
+            //
+            //           | X2 Y2 |             | X1 Y1 |             | X1 Y1 |
+            // (L1/W2W3) | X3 Y3 | - (L2/W1W3) | X3 Y3 | + (L3/W1W2) | X2 Y2 |
+            //
+            // Multiply everything by W1W2W3:
+            //
+            //            | X2 Y2 |        | X1 Y1 |        | X1 Y1 |
+            // sign( L1W1 | X3 Y3 | - L2W2 | X3 Y3 | + L3W3 | X2 Y2 | ) *
+            // sign(W1) * sign(W2) * sign(W3)
+            
+            // The four approximated li's. It is OK since they will
+            // always have the same value for the same vertex.
+            // We do it like that because computing them exactly (and
+            // properly propagating the wi^2's) makes expansions
+            // overflow/underflow.
+            // It is like perturbating a regular (weighted) triangulation
+            // instead of a Delaunay triangulation.
+            // However, if incircle(p1,p2,p3,p4) is lower than 0, it does
+            // not imply that (p1,p2,p3,p4) forms a convex quadrilateral
+            // (needs to be tested in addition, it is what CDT2d does
+            // when exact_incircle_ is set to false).
 
-            geo_assert(sw1 != ZERO && sw2 != ZERO && sw3 != ZERO);
+            // We could also compute them here, as follows (but we
+            // are caching them in MeshSurfaceIntersection's temporary
+            // Vertex objects), this gains 20-25% performance so it is
+            // worth it.
+            /*
+            double l0 = (geo_sqr(p0.x) + geo_sqr(p0.y)).estimate() /
+                         geo_sqr(p0.w).estimate();
             
-            expansion_nt w2w3Delta1 = det2x2(U2.x, U2.y, U3.x, U3.y);
-            expansion_nt w1w3Delta2 = det2x2(U1.x, U1.y, U3.x, U3.y);
-            expansion_nt w1w2Delta3 = det2x2(U1.x, U1.y, U2.x, U2.y);
+            double l1 = (geo_sqr(p1.x) + geo_sqr(p1.y)).estimate() /
+                         geo_sqr(p1.w).estimate();
+            
+            double l2 = (geo_sqr(p2.x) + geo_sqr(p2.y)).estimate() /
+                         geo_sqr(p2.w).estimate();
+            
+            double l3 = (geo_sqr(p3.x) + geo_sqr(p3.y)).estimate() /
+                         geo_sqr(p3.w).estimate();
+            */
+            
+            // Filter
+            {
+                interval_nt l3I(l3);
+                interval_nt L1 = interval_nt(l0) - l3I;
+                interval_nt L2 = interval_nt(l1) - l3I;
+                interval_nt L3 = interval_nt(l2) - l3I;
+
+                vec2HI p3I(p3);
+                vec2HI P1 = vec2HI(p0) - p3I;
+                vec2HI P2 = vec2HI(p1) - p3I;
+                vec2HI P3 = vec2HI(p2) - p3I;
+
+                interval_nt::Sign2 s1 = P1.w.sign();
+                interval_nt::Sign2 s2 = P2.w.sign();
+                interval_nt::Sign2 s3 = P3.w.sign();
+
+                if(
+                    interval_nt::sign_is_non_zero(s1) &&
+                    interval_nt::sign_is_non_zero(s2) &&
+                    interval_nt::sign_is_non_zero(s3)
+                ) {
                 
-            Sign Delta3_sign = Sign(w1w2Delta3.sign()*sw1*sw2);
-            geo_assert(Delta3_sign != ZERO);
-            
-            expansion_nt w1w2w3R =
-                a13*w1*w2w3Delta1-a23*w2*w1w3Delta2+a33*w3*w1w2Delta3;
-            Sign R_sign = Sign(w1w2w3R.sign()*sw1*sw2*sw3);
-            
-            // Simulation of simplicity
-            if(R_sign == ZERO) {
-                const vec2HE* p_sort[4] = {
-                    &p0, &p1, &p2, &p3
-                };
-                std::sort(
-                    p_sort, p_sort+4,
-                    [](const vec2HE* A, const vec2HE* B)->bool{
-                        vec2HELexicoCompare cmp;
-                        return cmp(*A,*B);
-                    }
-                );
-                for(index_t i = 0; i < 4; ++i) {
-                    if(p_sort[i] == &p0) {
-                        expansion_nt w1w2w3Z =
-                            w2*w1w3Delta2-w1*w2w3Delta1+w3*w1w2Delta3;
-                        Sign Z_sign = Sign(w1w2w3Z.sign()*sw1*sw2*sw3);
-                        if(Z_sign != ZERO) {
-                            return Sign(Delta3_sign*Z_sign);
-                        }
-                    } else if(p_sort[i] == &p1) {
-                        Sign Delta1_sign = Sign(w2w3Delta1.sign()*sw2*sw3);
-                        if(Delta1_sign != ZERO) {
-                            return Sign(Delta3_sign * Delta1_sign);
-                        }
-                    } else if(p_sort[i] == &p2) {
-                        Sign Delta2_sign = Sign(w1w3Delta2.sign()*sw1*sw3);
-                        if(Delta2_sign != ZERO) {
-                            return Sign(-Delta3_sign * Delta2_sign);
-                        }
-                    } else if(p_sort[i] == &p3) {
-                        return NEGATIVE;
+                    interval_nt M1 = det2x2(P2.x, P2.y, P3.x, P3.y);
+                    interval_nt M2 = det2x2(P1.x, P1.y, P3.x, P3.y);
+                    interval_nt M3 = det2x2(P1.x, P1.y, P2.x, P2.y);
+
+                    interval_nt D = L1*P1.w*M1
+                                  - L2*P2.w*M2
+                                  + L3*P3.w*M3 ;
+
+                    interval_nt::Sign2 s = D.sign();
+                    if(interval_nt::sign_is_non_zero(s)) {
+                        return Sign(
+                            interval_nt::convert_sign(s) *
+                            interval_nt::convert_sign(s1) *
+                            interval_nt::convert_sign(s2) *
+                            interval_nt::convert_sign(s3) 
+                        );
                     }
                 }
             }
-            return Sign(Delta3_sign * R_sign);
-        }
 
-        Sign orient_2dlifted_SOS_projected(
-            const vec3HE& pp0, const vec3HE& pp1,
-            const vec3HE& pp2, const vec3HE& pp3,
-            double h0, double h1, double h2, double h3,
-            coord_index_t axis
-        ) {
-            // TODO: zero-allocation version.
-            coord_index_t u = coord_index_t((axis+1)%3);
-            coord_index_t v = coord_index_t((axis+2)%3);
-            vec2HE p0(pp0[u], pp0[v], pp0.w);
-            vec2HE p1(pp1[u], pp1[v], pp1.w);
-            vec2HE p2(pp2[u], pp2[v], pp2.w);
-            vec2HE p3(pp3[u], pp3[v], pp3.w);
-            return orient_2dlifted_SOS(
-                p0, p1, p2, p3,
-                h0, h1, h2, h3
+            // Exact
+            {
+                expansion_nt L1(expansion_nt::DIFF, l0, l3);
+                expansion_nt L2(expansion_nt::DIFF, l1, l3);
+                expansion_nt L3(expansion_nt::DIFF, l2, l3);
+                L1.optimize(); L2.optimize(); L3.optimize();
+                
+                vec2HE P1 = p0 - p3;
+                vec2HE P2 = p1 - p3;
+                vec2HE P3 = p2 - p3;
+                P1.optimize(); P2.optimize(); P3.optimize();
+                
+
+                expansion_nt M1 = det2x2(P2.x, P2.y, P3.x, P3.y);
+                expansion_nt M2 = det2x2(P1.x, P1.y, P3.x, P3.y);
+                expansion_nt M3 = det2x2(P1.x, P1.y, P2.x, P2.y);
+                M1.optimize(); M2.optimize(); M3.optimize();
+                
+                expansion_nt D = L1*P1.w*M1
+                               - L2*P2.w*M2
+                               + L3*P3.w*M3 ;
+                
+                result = Sign(D.sign()*P1.w.sign()*P2.w.sign()*P3.w.sign());
+            }
+            
+            if(result != ZERO) {
+                return result;
+            }
+
+            // Symbolic perturbation.
+            //
+            // We use the simple form of the predicate:
+            // | x0 y0 (x0^2+y0^2+eps^i0) 1 |
+            // | x1 y1 (x1^2+y1^2+eps^i1) 1 |
+            // | x2 y2 (x2^2+y2^2+eps^i2) 1 |
+            // | x3 y3 (x3^2+y3^2+eps^i3) 1 |
+            // where i0,i1,i2,i3 denote the indices of the points (here, they
+            // are local indices, coming from geometric sorting, lexico order)
+            // Develop along the third row (keeping only the terms in epsilon):
+            //          | x1 y1 1 |          | x0 y0 1 |          
+            //   eps^i0 | x2 y2 1 | - eps^i1 | x2 y2 1 |
+            //          | x3 y3 1 |          | x3 y3 1 |          
+            //
+            //          | x0 y0 1 |          | x0 y0 1 |
+            // + eps^i2 | x1 y1 1 | - eps^i3 | x1 y1 1 |
+            //          | x3 y3 1 |          | x2 y2 1 |
+            return SOS(
+                vec2HgLexicoCompare<expansion_nt>(),
+                p0, SOS_result( det3_111_sign(p1,p2,p3)),
+                p1, SOS_result(-det3_111_sign(p0,p2,p3)),
+                p2, SOS_result( det3_111_sign(p0,p1,p3)),
+                p3, SOS_result(-det3_111_sign(p0,p1,p2))
             );
         }
     }
-
-    bool get_three_planes_intersection(
-        vec3HE& result,
-        const vec3& p1, const vec3& p2, const vec3& p3,
-        const vec3& q1, const vec3& q2, const vec3& q3,
-        const vec3& r1, const vec3& r2, const vec3& r3
-    ) {
-
-        vec3E N1 = triangle_normal<vec3E>(p1,p2,p3);
-        vec3E N2 = triangle_normal<vec3E>(q1,q2,q3);
-        vec3E N3 = triangle_normal<vec3E>(r1,r2,r3);
-
-        vec3E B(
-            dot(N1,make_vec3<vec3E>(p1)),
-            dot(N2,make_vec3<vec3E>(q1)),
-            dot(N3,make_vec3<vec3E>(r1))
-        );
-        
-        result.w = det3x3(
-            N1.x, N1.y, N1.z,
-            N2.x, N2.y, N2.z,
-            N3.x, N3.y, N3.z
-        );
-
-        if(result.w.sign() == ZERO) {
-            return false;
-        }
-        
-        result.x = det3x3(
-            B.x, N1.y, N1.z,
-            B.y, N2.y, N2.z,
-            B.z, N3.y, N3.z
-        );
-
-        result.y = det3x3(
-            N1.x, B.x, N1.z,
-            N2.x, B.y, N2.z,
-            N3.x, B.z, N3.z
-        );
-
-        result.z = det3x3(
-            N1.x, N1.y, B.x,
-            N2.x, N2.y, B.y,
-            N3.x, N3.y, B.z
-        );
-
-        return true;
-    }
-
-    /**********************************************************/
-    
-    vec3HE GEOGRAM_API plane_line_intersection(
-        const vec3& p1, const vec3& p2, const vec3& p3,
-        const vec3& q1, const vec3& q2
-    ) {
-        // Moller & Trumbore's algorithm
-        // see: https://stackoverflow.com/questions/42740765/
-        //  intersection-between-line-and-triangle-in-3d
-        vec3E D   = make_vec3<vec3E>(q1,q2);
-        vec3E E1  = make_vec3<vec3E>(p1,p2);
-        vec3E E2  = make_vec3<vec3E>(p1,p3);
-        vec3E AO  = make_vec3<vec3E>(p1,q1);
-        vec3E N   = cross(E1,E2);
-        expansion_nt d = -dot(D,N);
-        geo_debug_assert(d.sign() != ZERO);
-        rational_nt t(dot(AO,N),d);
-        return mix(t,q1,q2);
-    }
-    
 }
+
 

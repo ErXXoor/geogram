@@ -41,6 +41,7 @@
 
 #include <geogram/basic/android_utils.h>
 #include <geogram/basic/argused.h>
+#include <geogram/basic/string.h>
 #include <android_native_app_glue.h>
 
 namespace {
@@ -87,7 +88,7 @@ namespace {
     }
 
     /**
-     * \brief To be called at the endof each function that uses the JNI.
+     * \brief To be called at the end of each function that uses the JNI.
      * \details Detaches the current thread from the JavaVM if need be.
      * \param[in] app a pointer to the android_app
      * \param[in] jni_env a pointer to the JNIEnv
@@ -124,7 +125,10 @@ namespace {
 	bool thread_attached = false;
 	enter_JNI_function(app, lJNIEnv, thread_attached);
 
-	// Retrieves NativeActivity.
+	// Retrieves NativeActivity. Note the comment in native-activity.h:
+        // "this member is mis-named. It should be named "activity" instead
+        // of "clazz", since it's a reference to the NativeActivity instance
+        // created by the system.
 	jobject lNativeActivity = app->activity->clazz;
 	jclass ClassNativeActivity = lJNIEnv->GetObjectClass(lNativeActivity);
 
@@ -323,7 +327,13 @@ namespace GEO {
 	    );
 
 	    // Call checkSelfPermission
+
+            // Retrieves NativeActivity. Note the comment in native-activity.h:
+            // "this member is mis-named. It should be named "activity" instead
+            // of "clazz", since it's a reference to the NativeActivity instance
+            // created by the system.
 	    jobject activity = app->activity->clazz;
+            
 	    jclass ClassContext = lJNIEnv->FindClass(
 		"android/content/Context"
 	    );
@@ -360,6 +370,10 @@ namespace GEO {
 		);
 	    }
 
+            // Retrieves NativeActivity. Note the comment in native-activity.h:
+            // "this member is mis-named. It should be named "activity" instead
+            // of "clazz", since it's a reference to the NativeActivity instance
+            // created by the system.
 	    jobject activity = app->activity->clazz;
 	
 	    jclass ClassActivity = lJNIEnv->FindClass(
@@ -391,6 +405,11 @@ namespace GEO {
 	    jmethodID getCacheDir = env->GetMethodID(
 		activityClass, "getCacheDir", "()Ljava/io/File;"
 	    );
+
+            // Note the comment in native-activity.h:
+            // "this member is mis-named. It should be named "activity" instead
+            // of "clazz", since it's a reference to the NativeActivity instance
+            // created by the system.
 	    jobject cache_dir = env->CallObjectMethod(
 		app->activity->clazz, getCacheDir
 	    );
@@ -411,7 +430,80 @@ namespace GEO {
 	    leave_JNI_function(app, env, thread_attached);
 	    return result;
 	}
-	
+    }
+}
+
+/*******************************************************************/
+
+namespace {
+    using namespace GEO;
+
+    static const char* event_type_to_str(int32_t event_type) {
+        switch(event_type) {
+        case AINPUT_EVENT_TYPE_KEY:
+            return "key";
+        case AINPUT_EVENT_TYPE_MOTION:
+            return "motion";
+        default:
+            return "unknown";
+        }
+    }
+
+    static const char* event_action_to_str(int32_t event_action) {
+        switch(event_action) {
+        case AKEY_EVENT_ACTION_DOWN:
+            return "key/motion_down";
+        case AKEY_EVENT_ACTION_UP:
+            return "key/motion_up";
+        case AMOTION_EVENT_ACTION_BUTTON_PRESS:
+            return "motion_button_press";
+        case AMOTION_EVENT_ACTION_BUTTON_RELEASE:
+            return "motion_button_release";
+        case AMOTION_EVENT_ACTION_HOVER_MOVE:
+            return "motion_hover_move";
+        case AMOTION_EVENT_ACTION_MOVE:
+            return "motion_move";
+        case AMOTION_EVENT_ACTION_SCROLL:
+            return "motion_scroll";
+        default:
+            return "unknown";
+        }
+    }
+
+    static const char* event_tool_type_to_str(int32_t event_tool_type) {
+        switch(event_tool_type) {
+        case AMOTION_EVENT_TOOL_TYPE_MOUSE:
+            return "mouse";
+        case AMOTION_EVENT_TOOL_TYPE_STYLUS:
+            return "stylus";
+        case AMOTION_EVENT_TOOL_TYPE_ERASER:
+            return "eraser";
+        case AMOTION_EVENT_TOOL_TYPE_FINGER:
+            return "finger";
+        default:
+            return "unknown";
+        }
+    }
+}
+
+namespace GEO {
+    namespace AndroidUtils {
+        
+        void debug_show_event(AInputEvent* event) {
+            std::string msg = std::string("Event=") + " type:"   +
+                std::string(event_type_to_str(AInputEvent_getType(event)));
+        
+            if(AInputEvent_getType(event) == AINPUT_EVENT_TYPE_MOTION) {
+                msg += " action:" + std::string(
+                        event_action_to_str(AMotionEvent_getAction(event))
+                    ) + " tool:" + std::string(
+                       event_tool_type_to_str(AMotionEvent_getToolType(event,0))
+                    ) + " nb_pointers:" + ::GEO::String::to_string(
+                        int(AMotionEvent_getPointerCount(event))
+                    ) ;
+            }
+            ::GEO::AndroidUtils::debug_log(msg);
+        }
     }
 }
 

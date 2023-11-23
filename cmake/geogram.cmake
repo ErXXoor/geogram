@@ -32,11 +32,30 @@ else()
    set(GEOGRAM_WITH_VORPALINE OFF)
 endif()
 
-if ("${GEOGRAM_WITH_VORPALINE}" STREQUAL ON)
-   message(STATUS "Configuring build for Geogram + Vorpaline")
-   add_definitions(-DGEOGRAM_WITH_VORPALINE)
+# Determine whether Geogram is built with Vorpaline
+if(IS_DIRECTORY ${GEOGRAM_SOURCE_DIR}/src/lib/geogram/geogramplus)
+   set(GEOGRAM_WITH_GEOGRAMPLUS ON)
 else()
-   message(STATUS "Configuring build for standalone Geogram (without Vorpaline)")
+   set(GEOGRAM_WITH_GEOGRAMPLUS OFF)
+endif()
+
+# Determine whether Geogram is built with Exploragram
+if(NOT DEFINED GEOGRAM_WITH_EXPLORAGRAM)
+   if(IS_DIRECTORY ${GEOGRAM_SOURCE_DIR}/src/lib/exploragram)
+      set(GEOGRAM_WITH_EXPLORAGRAM ON)
+   else()
+      set(GEOGRAM_WITH_EXPLORAGRAM OFF)
+   endif()
+endif()   
+
+if (GEOGRAM_WITH_GEOGRAMPLUS)
+   message(STATUS "addon: geogramplus")
+   add_definitions(-DGEOGRAM_WITH_GEOGRAMPLUS)
+endif()
+
+if (GEOGRAM_WITH_VORPALINE)
+   message(STATUS "addon: Vorpaline")
+   add_definitions(-DGEOGRAM_WITH_VORPALINE)
 endif()
 
 if(GEOGRAM_WITH_HLBFGS)
@@ -126,5 +145,10 @@ set(RELATIVE_LIB_OUTPUT_DIR ${RELATIVE_OUTPUT_DIR}/lib/)
 include_directories(${GEOGRAM_SOURCE_DIR}/src/lib)
 include_directories(${GEOGRAM_SOURCE_DIR}/src/lib/geogram_gfx/third_party/)
 link_directories(${GEOGRAM_SOURCE_DIR}/${RELATIVE_LIB_DIR})
+
+
+if(GEOGRAM_WITH_VORPALINE)
+    include_directories(${GEOGRAM_SOURCE_DIR}/src/lib/vorpalib)
+endif()
 
 ##############################################################################

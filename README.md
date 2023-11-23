@@ -15,11 +15,15 @@
 
 ![](https://github.com/BrunoLevy/geogram/wiki/geogram_banner_2023.png)
 
+Geogram received the [Symposium on Geometry Processing Software Award](http://awards.geometryprocessing.org/)
+in 2023.
+
 Geogram is a programming library with geometric algorithms. It has
 geometry-processing functionalities:
 - [surface reconstruction](https://github.com/BrunoLevy/geogram/wiki/Reconstruction)
 - [remeshing](https://github.com/BrunoLevy/geogram/wiki/Remeshing)
 - [parameterization and texturing](https://github.com/BrunoLevy/geogram/wiki/Texturing)
+- Boolean operations
 
 It also has lower-level algorithm:
 - [Exact numbers / exact predicates](https://brunolevy.github.io/geogram/multi__precision_8h.html)
@@ -46,6 +50,7 @@ Links
   - [Graphite](https://github.com/BrunoLevy/GraphiteThree), an experimental 3D modeler built around geogram.
   - [Geogram in-browser demos](https://github.com/BrunoLevy/geogram/wiki/compiling_Emscripten#examples)
     (How is it possible ? _more on this [here](https://github.com/BrunoLevy/geogram/wiki/compiling_Emscripten)_)
+  - [Data](https://github.com/BrunoLevy/GraphiteThree/wiki/Data)
 
 How does it compare to other geometry-processing libraries ?
 ------------------------------------------------------------

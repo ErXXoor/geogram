@@ -42,7 +42,9 @@
 
 #include <geogram/basic/common.h>
 #include <geogram/basic/geometry.h>
+#include <geogram/basic/vechg.h>
 #include <geogram/numerics/expansion_nt.h>
+#include <geogram/numerics/interval_nt.h>
 
 /**
  * \file geogram/numerics/exact_geometry.h
@@ -50,9 +52,8 @@
  * \details Implements vector types with expansion
  *  coordinates (vec2E, vec3E), vector types with
  *  homogeneous expansion coordinates (vec2HE, vec3HE),
- *  2d orientation predicate, 3d-lifted orientation
- *  predicate (can be used to implement incircle), and
- *  constructions for intersections.
+ *  2d orientation predicate, incircle predicate
+ *  and constructions for intersections.
  */
 
 namespace GEO {
@@ -70,260 +71,87 @@ namespace GEO {
     typedef vecng<3,expansion_nt> vec3E;    
 
     /**
+     * \brief vec2 with coordinates as interval_nt
+     * \details Used to write arithmetic filters
+     *  for geometric predicates.
+     */
+    typedef vecng<2,interval_nt> vec2I;    
+    
+    /**
+     * \brief vec3 with coordinates as interval_nt
+     * \details Used to write arithmetic filters
+     *  for geometric predicates.
+     */
+    typedef vecng<3,interval_nt> vec3I;    
+
+    /**
      * \brief 2D vector in homogeneous coordinates
-     *  with coordinates as arithmetic expansions
+     *  with coordinates as expansions
      * \details Coordinates support +,-,* and / by
      *  multiplying w.
      */
-    struct vec2HE {
-
-        /**
-         * \brief Creates an uninitialized vec2HE
-         */
-        vec2HE() :
-            x(expansion_nt::UNINITIALIZED),
-            y(expansion_nt::UNINITIALIZED),
-            w(expansion_nt::UNINITIALIZED)            
-        {
-        }
-
-        vec2HE(
-            const expansion_nt& x_in,
-            const expansion_nt& y_in,
-            const expansion_nt& w_in
-        ) : x(x_in), y(y_in), w(w_in) {
-        }
-
-        vec2HE(
-            expansion_nt&& x_in,
-            expansion_nt&& y_in,
-            expansion_nt&& w_in
-        ) : x(x_in), y(y_in), w(w_in) {
-        }
-        
-        vec2HE(const vec2HE& rhs) :
-            x(rhs.x), y(rhs.y), w(rhs.w) {
-        }
-
-        vec2HE(vec2HE&& rhs) :
-            x(rhs.x), y(rhs.y), w(rhs.w) {
-        }
-
-        explicit vec2HE(const vec2& rhs) : 
-            x(rhs.x), y(rhs.y), w(1.0) {
-        }
-        
-        vec2HE& operator=(const vec2HE& rhs) {
-            if(&rhs != this) {
-                x=rhs.x;
-                y=rhs.y;
-                w=rhs.w;
-            }
-            return *this;
-        }
-
-        vec2HE& operator=(vec2HE&& rhs) {
-            if(&rhs != this) {
-                x=rhs.x;
-                y=rhs.y;
-                w=rhs.w;
-            }
-            return *this;
-        }
-
-        expansion_nt* data() {
-            return &x;
-        }
-
-        const expansion_nt* data() const {
-            return &x;
-        }
-        
-        expansion_nt& operator[](coord_index_t i) {
-            geo_debug_assert(i < 2);
-            return data()[i];
-        }
-
-        const expansion_nt& operator[](coord_index_t i) const {
-            geo_debug_assert(i < 2);
-            return data()[i];
-        }
-
-        /**
-         * \brief Optimizes the internal storage of the 
-         *  expansions used to store the coordinates.
-         */
-        void optimize() {
-            x.optimize();
-            y.optimize();
-            w.optimize();
-        }
-        
-        expansion_nt x;
-        expansion_nt y;
-        expansion_nt w;
-    };
+    typedef vec2Hg<expansion_nt> vec2HE;
 
     /**
      * \brief 3D vector in homogeneous coordinates
-     *  with coordinates as arithmetic expansions.
+     *  with coordinates as expansions
      * \details Coordinates support +,-,* and / by
      *  multiplying w.
      */
-    struct vec3HE {
-
-        /**
-         * \brief Creates an uninitialized vec3HE
-         */
-        vec3HE() :
-            x(expansion_nt::UNINITIALIZED),
-            y(expansion_nt::UNINITIALIZED),
-            z(expansion_nt::UNINITIALIZED),
-            w(expansion_nt::UNINITIALIZED)            
-        {
-        }
-
-        vec3HE(
-            const expansion_nt& x_in,
-            const expansion_nt& y_in,
-            const expansion_nt& z_in,
-            const expansion_nt& w_in            
-        ) : x(x_in), y(y_in), z(z_in), w(w_in) {
-        }
-
-        vec3HE(
-            expansion_nt&& x_in,
-            expansion_nt&& y_in,
-            expansion_nt&& z_in,
-            expansion_nt&& w_in
-        ) : x(x_in), y(y_in), z(z_in), w(w_in) {
-        }
-
-        vec3HE(
-            double x_in,
-            double y_in,
-            double z_in,
-            double w_in
-        ) : x(x_in), y(y_in), z(z_in), w(w_in) {
-        }
-        
-        vec3HE(const vec3HE& rhs) :
-            x(rhs.x), y(rhs.y), z(rhs.z), w(rhs.w) {
-        }
-
-        vec3HE(vec3HE&& rhs) :
-            x(rhs.x), y(rhs.y), z(rhs.z), w(rhs.w) {
-        }
-
-        explicit vec3HE(const vec3& rhs) : 
-            x(rhs.x), y(rhs.y), z(rhs.z), w(1.0) {
-        }
-        
-        vec3HE& operator=(const vec3HE& rhs) {
-            if(&rhs != this) {
-                x=rhs.x;
-                y=rhs.y;
-                z=rhs.z;                
-                w=rhs.w;
-            }
-            return *this;
-        }
-
-        vec3HE& operator=(vec3HE&& rhs) {
-            if(&rhs != this) {
-                x=rhs.x;
-                y=rhs.y;
-                z=rhs.z;                
-                w=rhs.w;
-            }
-            return *this;
-        }
-
-        expansion_nt* data() {
-            return &x;
-        }
-
-        const expansion_nt* data() const {
-            return &x;
-        }
-        
-        expansion_nt& operator[](coord_index_t i) {
-            geo_debug_assert(i < 3);
-            return data()[i];
-        }
-
-        const expansion_nt& operator[](coord_index_t i) const {
-            geo_debug_assert(i < 3);
-            return data()[i];
-        }
-
-        /**
-         * \brief Optimizes the internal storage of the 
-         *  expansions used to store the coordinates.
-         */
-        void optimize() {
-            x.optimize();
-            y.optimize();
-            z.optimize();            
-            w.optimize();
-        }
-        
-        expansion_nt x;
-        expansion_nt y;
-        expansion_nt z;        
-        expansion_nt w;
-    };
-
-    vec2HE GEOGRAM_API operator-(const vec2HE& p1, const vec2HE& p2);
-    
-    vec3HE GEOGRAM_API operator-(const vec3HE& p1, const vec3HE& p2);
+    typedef vec3Hg<expansion_nt> vec3HE;
 
     /**
-     * \brief Comparator class for vec3HE
-     * \detail Used to create maps indexed by vec3HE
+     * \brief 2D vector in homogeneous coordinates
+     *  with coordinates as intervals.
+     * \details Used to write arithmetic filters
+     *  for geometric predicates.
      */
-    class GEOGRAM_API vec2HELexicoCompare {
-    public:
-       /**
-        * \brief Compares two vec3HE
-        * \retval true if \p v1 is before \p v2 in the lexicographic
-        *  order
-        * \retval false otherwise
-        */
-       bool operator()(const vec2HE& v1, const vec2HE& v2) const; 
-    };
-    
+    typedef vec2Hg<interval_nt> vec2HI;
+
     /**
-     * \brief Comparator class for vec3HE
-     * \detail Used to create maps indexed by vec3HE
+     * \brief 3D vector in homogeneous coordinates
+     *  with coordinates as intervals.
+     * \details Used to write arithmetic filters
+     *  for geometric predicates.
      */
-    class GEOGRAM_API vec3HELexicoCompare {
-    public:
-       /**
-        * \brief Compares two vec3HE
-        * \retval true if \p v1 is before \p v2 in the lexicographic
-        *  order
-        * \retval false otherwise
-        */
-       bool operator()(const vec3HE& v1, const vec3HE& v2) const; 
-    };
+    typedef vec3Hg<interval_nt> vec3HI;
 
-    vec3HE GEOGRAM_API mix(
-        const rational_nt& t, const vec3& p1, const vec3& p2
+    /***********************************************************************/
+
+    /**
+     * \brief Specialization optimized using low-level API
+     */
+    template<> vec2Hg<expansion_nt> GEOGRAM_API mix(
+        const rationalg<expansion_nt>& t,
+        const vecng<2,double>& p1, const vecng<2,double>& p2
     );
 
-    vec2HE GEOGRAM_API mix(
-        const rational_nt& t, const vec2& p1, const vec2& p2
+    /**
+     * \brief Specialization optimized using low-level API
+     */
+    template<> vec3Hg<expansion_nt> GEOGRAM_API mix(
+        const rationalg<expansion_nt>& t,
+        const vecng<3,double>& p1, const vecng<3,double>& p2
     );
 
-    vec2HE GEOGRAM_API mix(
-        const rational_nt& t, const vec2HE& p1, const vec2HE& p2
+    /**
+     * \brief Specialization optimized using low-level API
+     */
+    template<> vec2Hg<expansion_nt> GEOGRAM_API mix(
+        const rationalg<expansion_nt>& t,
+        const vec2Hg<expansion_nt>& p1, const vec2Hg<expansion_nt>& p2
     );
 
-    vec3HE GEOGRAM_API mix(
-        const rational_nt& t, const vec3HE& p1, const vec3HE& p2
+    /**
+     * \brief Specialization optimized using low-level API
+     */
+    template<> vec3Hg<expansion_nt> GEOGRAM_API mix(
+        const rationalg<expansion_nt>& t,
+        const vec3Hg<expansion_nt>& p1, const vec3Hg<expansion_nt>& p2
     );
 
+    /***********************************************************************/
+    
     /**
      * \brief Specialization optimized using low-level API
      */
@@ -341,23 +169,6 @@ namespace GEO {
     
     namespace PCK {
 
-        template <class T> inline bool same_point(
-            const vecng<3,T>& v1, const vecng<3,T>& v2
-        ) {
-            // operator== is well optimized for expansion_nt and rational_nt
-            return (v1.x == v2.x) && (v1.y == v2.y) && (v2.z == v1.z);
-        }
-
-        template <class T> inline bool same_point(
-            const vecng<2,T>& v1, const vecng<2,T>& v2
-        ) {
-            // operator== is well optimized for expansion_nt and rational_nt
-            return (v1.x == v2.x) && (v1.y == v2.y);
-        }
-
-        bool GEOGRAM_API same_point(const vec2HE& v1, const vec2HE& v2);
-        bool GEOGRAM_API same_point(const vec3HE& v1, const vec3HE& v2);  
-        
         Sign GEOGRAM_API orient_2d(
             const vec2HE& p0, const vec2HE& p1, const vec2HE& p2
         );
@@ -366,41 +177,93 @@ namespace GEO {
             const vec3HE& p0, const vec3HE& p1, const vec3HE& p2,
             coord_index_t axis
         );
+
+        void GEOGRAM_API orient_2d_projected_stats(); 
         
+        Sign GEOGRAM_API orient_3d(
+            const vec3HE& p0, const vec3HE& p1,
+            const vec3HE& p2, const vec3HE& p3
+        );
+
         Sign GEOGRAM_API dot_2d(
             const vec2HE& p0, const vec2HE& p1, const vec2HE& p2
         );
 
         /**
-         * \brief Computes the 3d orientation test with lifted points.
-         * \details Given three lifted points p0', p1', p2' in 
-         *  R^2, tests if the lifted point p3' in R^3 lies below or above 
-         *  the plane passing through the three points 
-         *  p0', p1', p2'.
-         *  The first two coordinates and the third one are specified in 
-         *  separate arguments for each vertex.
-         * \param[in] p0 , p1 , p2 , p3 first 2 coordinates 
-         *   of the vertices of the 3-simplex
-         * \param[in] h0 , h1 , h2 , h3 heights of the vertices of 
-         *  the 3-simplex
-         * \retval POSITIVE if p3' lies below the plane
-         * \retval NEGATIVE if p3' lies above the plane
-         * \retval perturb() if p3' lies exactly on the hyperplane
-         *  where \c perturb() denotes a globally
-         *  consistent perturbation, that returns either POSITIVE or NEGATIVE
+         * \brief Tests whether a point is in the circumscribed circle of 
+         *  three other points.
+         * \details If the triangle \p p0 , \p p1 , \p p2 is oriented 
+         *  clockwise instead of counter-clockwise, then the result is inversed.
+         * \param[in] p0 , p1 , p2 , p3 the four points, 
+         *  in homogeneous coordinates,represented in exact form. 
+         * \param[in] l0 , l1 , l2 , l3 the four approximated pre-computed 
+         *  lengths li = (xi^2 + yi^2) / wi^2 as double coordinates
+         * \retval POSITIVE if p3 is inside 
+         *   the circumscribed circle of p0, p1, p2
+         * \retval NEGATIVE if p3 is outside 
+         *  the circumscribed circle of p0, p1, p2
+         * \retval a coherent perturbation otherwise
          */
-        Sign GEOGRAM_API orient_2dlifted_SOS(
+        Sign GEOGRAM_API incircle_2d_SOS_with_lengths(
             const vec2HE& p0, const vec2HE& p1,
             const vec2HE& p2, const vec2HE& p3,
-            double h0, double h1, double h2, double h3
+            double l0, double l1, double l2, double l3
         );
 
-        Sign GEOGRAM_API orient_2dlifted_SOS_projected(
-            const vec3HE& p0, const vec3HE& p1,
-            const vec3HE& p2, const vec3HE& p3,
-            double h0, double h1, double h2, double h3,
-            coord_index_t axis
+        /**
+         * \brief Tests whether a point is in the circumscribed circle of 
+         *  three other points.
+         * \details If the triangle \p p0 , \p p1 , \p p2 is oriented 
+         *  clockwise instead of counter-clockwise, then the result is inversed.
+         * \param[in] p0 , p1 , p2 , p3 the four points, 
+         *  in homogeneous coordinates,represented in exact form. 
+         * \param[in] l0 , l1 , l2 , l3 the four approximated pre-computed 
+         *  lengths li = (xi^2 + yi^2) / wi^2 as double coordinates
+         * \retval POSITIVE if p3 is inside 
+         *   the circumscribed circle of p0, p1, p2
+         * \retval NEGATIVE if p3 is outside 
+         *  the circumscribed circle of p0, p1, p2
+         * \retval a coherent perturbation otherwise
+         */
+        Sign GEOGRAM_API incircle_2d_SOS_with_lengths(
+            const vec2HE& p0, const vec2HE& p1,
+            const vec2HE& p2, const vec2HE& p3,
+            double l0, double l1, double l2, double l3
         );
+        
+        /**
+         * \brief Tests whether a point is in the circumscribed circle of 
+         *  three other points.
+         * \details If the triangle \p p0 , \p p1 , \p p2 is oriented 
+         *  clockwise instead of counter-clockwise, then the result is inversed.
+         *  One can use instead the incircle_2d_SOS_with_lengths() that is 
+         *  faster and that uses cached lengths.
+         * \see incircle_2d_SOS_with_lengths()
+         * \param[in] p0 , p1 , p2 , p3 the four points, 
+         *  in homogeneous coordinates,represented in exact form. 
+         * \retval POSITIVE if p3 is inside 
+         *   the circumscribed circle of p0, p1, p2
+         * \retval NEGATIVE if p3 is outside 
+         *  the circumscribed circle of p0, p1, p2
+         * \retval a coherent perturbation otherwise
+         */
+        inline Sign incircle_2d_SOS(
+            const vec2HE& p0, const vec2HE& p1,
+            const vec2HE& p2, const vec2HE& p3
+        ) {
+            double l0 = (geo_sqr(p0.x) + geo_sqr(p0.y)).estimate() /
+                         geo_sqr(p0.w).estimate();
+            
+            double l1 = (geo_sqr(p1.x) + geo_sqr(p1.y)).estimate() /
+                         geo_sqr(p1.w).estimate();
+            
+            double l2 = (geo_sqr(p2.x) + geo_sqr(p2.y)).estimate() /
+                         geo_sqr(p2.w).estimate();
+            
+            double l3 = (geo_sqr(p3.x) + geo_sqr(p3.y)).estimate() /
+                         geo_sqr(p3.w).estimate();
+            return incircle_2d_SOS_with_lengths(p0,p1,p2,p3,l0,l1,l2,l3);
+        }
         
     }
 
@@ -498,37 +361,6 @@ namespace GEO {
      */
     template <> GEOGRAM_API vec3E triangle_normal<vec3E>(
         const vec3& p1, const vec3& p2, const vec3& p3
-    );
-
-    /**
-     * \brief Computes the exact intersection between the support
-     *  planes of three triangles
-     * \param[in] p1 , p2 , p3 the three vertices of the first triangle
-     * \param[in] q1 , q2 , q3 the three vertices of the second triangle
-     * \param[in] r1 , r2 , r3 the three vertices of the third triangle
-     * \param[out] result the exact intersection between the three planes
-     *  if it exsists
-     * \retval true if the planes have an intersection
-     * \retval false otherwise
-     */
-    bool GEOGRAM_API get_three_planes_intersection(
-        vec3HE& result,
-        const vec3& p1, const vec3& p2, const vec3& p3,
-        const vec3& q1, const vec3& q2, const vec3& q3,
-        const vec3& r1, const vec3& r2, const vec3& r3
-    );
-
-    /**
-     * \brief Computes the exact intersection between the support plane
-     *  of a triangle and the support line of a segment
-     * \pre The intersection exists
-     * \param[in] p1 , p2 , p3 the three vertices of the triangle
-     * \param[in] q1 , q2 the two vertices of the segment
-     * \return the exact intersection between the plane and the line
-     */
-    vec3HE GEOGRAM_API plane_line_intersection(
-        const vec3& p1, const vec3& p2, const vec3& p3,
-        const vec3& q1, const vec3& q2
     );
 
     /************************************************************************/

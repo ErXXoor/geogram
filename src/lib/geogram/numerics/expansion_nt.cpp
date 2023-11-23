@@ -259,34 +259,40 @@ namespace GEO {
         return expansion_nt(expansion_nt::DIFF,z1,z2);
     }
     
-    /************************************************************************/
-    
-    Sign rational_nt::compare(const rational_nt& rhs) const {
-	if(has_same_denom(rhs)) {
-	    const expansion& diff_num = expansion_diff(
-		num_.rep(), rhs.num_.rep()
-	    );
-	    return Sign(diff_num.sign() * denom_.sign());
-	}
-	const expansion& num_a = expansion_product(
-	    num_.rep(), rhs.denom_.rep()
-	);
-	const expansion& num_b = expansion_product(
-	    rhs.num_.rep(), denom_.rep()
-	);
-	const expansion& diff_num = expansion_diff(num_a, num_b);
-	return Sign(
-	    diff_num.sign() * denom_.sign() * rhs.denom_.sign()
-	);
+    /***********************************************************************/
+
+    namespace Numeric {
+        
+        template<> Sign ratio_compare(
+            const expansion_nt& a_num, const expansion_nt& a_denom,
+            const expansion_nt& b_num, const expansion_nt& b_denom
+        ) {
+            Sign s1 = Sign(a_num.sign()*a_denom.sign());
+            Sign s2 = Sign(b_num.sign()*b_denom.sign());
+            if(s1 == ZERO && s2 == ZERO) {
+                return ZERO;
+            }
+            if(s1 != s2) {
+                return (int(s1) > int(s2) ? POSITIVE : NEGATIVE);
+            }
+            if(a_denom == b_denom) {
+                const expansion& diff_num = expansion_diff(
+                    a_num.rep(), b_num.rep()
+                );
+                return Sign(diff_num.sign() * a_denom.sign());
+            }
+            const expansion& num_a = expansion_product(
+                a_num.rep(), b_denom.rep()
+            );
+            const expansion& num_b = expansion_product(
+                b_num.rep(), a_denom.rep()
+            );
+            const expansion& diff_num = expansion_diff(num_a, num_b);
+            return Sign(
+                diff_num.sign() * a_denom.sign() * b_denom.sign()
+            );
+        }
+        
     }
 
-    Sign rational_nt::compare(double rhs) const {
-	const expansion& num_b = expansion_product(
-	    denom_.rep(), rhs
-	);
-	const expansion& diff_num = expansion_diff(num_.rep(), num_b);
-	return Sign(diff_num.sign() * denom_.sign());
-    }
-    
-    /***********************************************************************/
 }

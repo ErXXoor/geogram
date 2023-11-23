@@ -53,6 +53,12 @@
 // (but has a non-negligible impact on performance)
 // #define PCK_STATS
 
+#ifdef PCK_STATS
+#define PCK_STAT(x) x
+#else
+#define PCK_STAT(x)
+#endif
+
 namespace GEO {
 
     /**

@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2000-2022 Inria
+ *  Copyright (c) 2000-2023 Inria
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -38,10 +38,11 @@
  */
 
 #include <geogram_gfx/gui/application.h>
+#include <geogram_gfx/gui/user_callback_android.h>
 
-#include <geogram_gfx/ImGui_ext/imgui_ext.h>
+#include <geogram_gfx/imgui_ext/imgui_ext.h>
 #include <geogram_gfx/third_party/imgui/backends/imgui_impl_opengl3.h>
-#include <geogram_gfx/ImGui_ext/icon_font.h>
+#include <geogram_gfx/imgui_ext/icon_font.h>
 
 #include <geogram_gfx/lua/lua_glup.h>
 #include <geogram_gfx/lua/lua_imgui.h>
@@ -77,26 +78,22 @@
 
 #elif defined(GEO_OS_ANDROID)
 
-#  include <geogram_gfx/third_party/ImGui/imgui_impl_android.h>
+#  include <geogram_gfx/imgui_ext/imgui_impl_android_ext.h>
 #  include <geogram/basic/android_utils.h>
 
 #  include <EGL/egl.h>
 #  include <EGL/eglext.h>
 #  include <GLES/gl.h>
 #  include <android_native_app_glue.h>
-#  include <android/log.h>
-namespace ImGui {
-    // Need this prototype (implemented in ImGui but not declared)
-    // for Android implementation.
-    void UpdateHoveredWindowAndCaptureFlags();
-}
 
 #endif
 
+namespace ImGui {
+    void UpdateHoveredWindowAndCaptureFlags();
+}
 
 namespace GEO {
 
-    void StyleColorsCorporateGrey(bool threeD);    
     /**
      * \brief Computes the pixel ratio for hidpi devices.
      * \details Uses the current GLFW window.
@@ -192,7 +189,6 @@ namespace GEO {
 	animate_ = false;
 	menubar_visible_ = true;
 	phone_screen_ = false;
-	soft_keyboard_visible_ = false;
     }
 
     Application::~Application() {
@@ -212,11 +208,6 @@ namespace GEO {
 	}
 	create_window();
 	main_loop();
-#ifdef GEO_OS_ANDROID
-	// Not very clean, but for now I do not know another
-	// solution to exit an Android app.
-	std::terminate();
-#endif
     }
     
     void Application::stop() {
@@ -224,11 +215,7 @@ namespace GEO {
     }
 
     std::string Application::get_styles() {
-#ifdef GEO_OS_ANDROID
 	return "Light;Dark";	
-#else
-	return "Light;Dark;CorporateGrey";
-#endif	
     }
     
     void Application::set_style(const std::string& style_name) {
@@ -256,8 +243,10 @@ namespace GEO {
 	    style.FrameBorderSize = 0.0f;
 	    style.PopupBorderSize = 1.0f;
 	    ImGui::StyleColorsDark();
-	} else if(style_name == "CorporateGrey") {
-	    StyleColorsCorporateGrey(true);
+            // Tron vibes...
+            ImVec4* colors = style.Colors;
+            colors[ImGuiCol_Text]         = ImVec4(0.50f, 1.00f, 1.00f, 1.00f);
+            colors[ImGuiCol_TextDisabled] = ImVec4(0.30f, 0.50f, 0.50f, 1.00f);
 	} else {
 	    set_style("Light");
 	    Logger::err("Skin") << style_name << ": no such style"
@@ -419,6 +408,9 @@ namespace GEO {
 	glupDeleteContext(glupCurrentContext());
 	glupMakeCurrent(nullptr);
 	GEO::Graphics::terminate();
+#ifdef GEO_OS_ANDROID        
+        data_->GL_initialized = false;
+#endif        
     }
     
     void Application::ImGui_initialize() {
@@ -466,7 +458,7 @@ namespace GEO {
 	    data_->window_, !data_->GLFW_callbacks_initialized_
 	);
 #elif defined(GEO_OS_ANDROID)
-	ImGui_ImplAndroid_Init(data_->app);
+	ImGui_ImplAndroidExt_Init(data_->app); 
 #endif	
 
 #if defined(GEO_OS_APPLE)
@@ -476,7 +468,9 @@ namespace GEO {
 #endif	
 	callbacks_initialize();
 
-	if(style_ != "") {
+        if(CmdLine::get_arg_bool("gui:phone_screen")) {
+            set_style("Dark");
+        } else if(style_ != "") {
 	    set_style(style_);
 	} else if(Environment::instance()->has_value("gui:style")) {
             std::string style = Environment::instance()->get_value("gui:style");
@@ -562,7 +556,7 @@ namespace GEO {
 	ImGui_ImplGlfw_Shutdown();
     data_->GLFW_callbacks_initialized_ = false;
 #elif defined(GEO_OS_ANDROID)
-	ImGui_ImplAndroid_Shutdown();
+	ImGui_ImplAndroidExt_Shutdown();
 #endif	
 	ImGui::DestroyContext();
 	ImGui_initialized_ = false;
@@ -573,24 +567,9 @@ namespace GEO {
 #if defined(GEO_GLFW)		
 	ImGui_ImplGlfw_NewFrame();
 #elif defined(GEO_OS_ANDROID)
-	ImGui_ImplAndroid_NewFrame();
+	ImGui_ImplAndroidExt_NewFrame();
 #endif	
 	ImGui::NewFrame();
-
-#ifdef GEO_OS_ANDROID
-	// TODO: test that no USB or bluetooth kbd is attached.
-	if(ImGui::GetIO().WantTextInput) {
-	    if(!soft_keyboard_visible_) {
-		AndroidUtils::show_soft_keyboard(CmdLine::get_android_app());
-		soft_keyboard_visible_ = true;
-	    }
-	} else {
-	    if(soft_keyboard_visible_) {
-		AndroidUtils::hide_soft_keyboard(CmdLine::get_android_app());
-		soft_keyboard_visible_ = false;
-	    }
-	}
-#endif
     }
 
     void Application::geogram_initialize(int argc, char** argv) {
@@ -820,10 +799,11 @@ namespace GEO {
 	    pre_draw();
 	    currently_drawing_gui_ = true;
 	    ImGui_new_frame();
-	    draw_graphics();
+	    draw_graphics(); 
 	    draw_gui();
 	    ImGui::Render();
 	    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+            glUseProgram(0); // RenderDrawData() leaves a bound program
 
 #ifndef GEO_OS_EMSCRIPTEN	    
 	    // Update and Render additional Platform Windows
@@ -856,7 +836,7 @@ namespace GEO {
 		--nb_frames_update_;
 	    }
 	} else {
-	    // Sleep for 0.2 seconds, to let the processor cold-down
+	    // Sleep for 0.2 seconds, to let the processor cool-down
 	    // instead of actively waiting (be a good citizen for the
 	    // other processes.
 	    Process::sleep(20000);
@@ -872,18 +852,6 @@ namespace GEO {
 	    ImGui_reload_font_ = false;
 	    ImGui_initialize();
 	}
-
-	/*
-	 // previous code to reload font, does not seem to work anymore
-         // (now we restart everything when reload_font_ is set)
-	  else if(ImGui_reload_font_) {
-	    ImGuiIO& io = ImGui::GetIO();	    
-	    io.Fonts->Clear();
-	    ImGui_load_fonts();
-	    ImGui_ImplOpenGL3_DestroyDeviceObjects();
-	    ImGui_reload_font_ = false;
-	  }
-	*/
     }
 
 #ifdef GEO_OS_EMSCRIPTEN
@@ -1218,13 +1186,6 @@ namespace GEO {
     /**************************** Android-specific code *********************/
 #elif defined(GEO_OS_ANDROID)
 
-    inline void android_debug(const std::string& msg) {
-	__android_log_print(
-	    ANDROID_LOG_VERBOSE, "GEOGRAM", "DBG: %s", msg.c_str()
-	);
-    }
-
-    
     /**
      * \brief Redirects Geogram messages both to the console
      * and to Android log (adb logcat | grep GEOGRAM)
@@ -1426,14 +1387,14 @@ namespace GEO {
 	    ImGui_initialize();
 	}
 	
-	if(needs_to_redraw()) {  
+	if(needs_to_redraw()) {
 	    currently_drawing_gui_ = true;
 	    ImGui_new_frame();
 	    draw_graphics();
 	    draw_gui();
 	    ImGui::Render();
 	    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-	    ImGui_ImplAndroid_EndFrame();
+            glUseProgram(0); // RenderDrawData() leaves a bound program
 	    currently_drawing_gui_ = false;
 	    eglSwapBuffers(data_->display, data_->surface);
 	    post_draw();
@@ -1442,7 +1403,7 @@ namespace GEO {
 		--nb_frames_update_;
 	    }
 	} else {
-	    // Sleep for 0.2 seconds, to let the processor cold-down
+	    // Sleep for 0.2 seconds, to let the processor cool-down
 	    // instead of actively waiting (be a good citizen for the
 	    // other processes.
 	    Process::sleep(20000);
@@ -1488,6 +1449,9 @@ namespace GEO {
 
 		// Check if we are exiting.
 		if (data_->app->destroyRequested != 0) {
+                    ::GEO::AndroidUtils::debug_log(
+                        "Destroy requested, freeing resources"
+                    );
 		    ImGui_terminate();
 		    GL_terminate();
 		    return;
@@ -1498,9 +1462,27 @@ namespace GEO {
 		one_frame();
 	    }
 	}
+        ::GEO::AndroidUtils::debug_log("End of main loop");
+        ::GEO::AndroidUtils::debug_log("calling std::terminate()");
+	// Not very clean, but for now I do not know another
+	// solution to exit an Android app.
+        std::terminate();
     }
 
     namespace {
+
+        int32_t android_input_event_handler(
+            struct android_app* app, AInputEvent* event
+        ) {
+            int32_t result = ImGui_ImplAndroidExt_HandleInputEvent(event);
+	    Application* geoapp = static_cast<Application*>(
+		CmdLine::get_android_app()->userData
+	    );
+            ImGui_ImplAndroidExt_HandleEventUserCallback(app, event);
+            geoapp->update(); 
+            return result;
+        }
+        
 	void android_command_handler(struct android_app* app, int32_t cmd) {
 	    Application* app_impl =
 		static_cast<GEO::Application*>(app->userData);
@@ -1509,6 +1491,7 @@ namespace GEO {
 	    
 	    switch (cmd) {
 		case APP_CMD_INIT_WINDOW:
+                    ::GEO::AndroidUtils::debug_log("command: APP_CMD_INIT_WINDOW");                    
 		    data->has_window = (app->window != nullptr);
 		    break;
 		    
@@ -1523,52 +1506,63 @@ namespace GEO {
 		  // "orientation|screenSize|keyboardHidden|keyboard|navigation"
 		  // else this event will be triggered  when a physical
 		  // keyboard is connected/disconnected while the app is
-		  // running. Note "navigation" 
-		    if(data->surface != EGL_NO_SURFACE) {
-			eglDestroySurface(data->display, data->surface);
-			data->surface = EGL_NO_SURFACE;
-		    }
-		    data->has_window = false;
+		  // running. Note "navigation"
+                    ::GEO::AndroidUtils::debug_log("command: APP_CMD_TERM_WINDOW");
+                    app_impl->ImGui_terminate();
+                    app_impl->GL_terminate();
+                    app_impl->delete_window();
 		    break;
 		    
 		case APP_CMD_GAINED_FOCUS:
+                    ::GEO::AndroidUtils::debug_log("command: APP_CMD_GAINED_FOCUS");                    
 		    data->has_focus = true;
 		    break;
 		    
 		case APP_CMD_LOST_FOCUS:
+                    ::GEO::AndroidUtils::debug_log("command: APP_CMD_LOST_FOCUS");                    
 		    data->has_focus = false;
 		    break;
 		    
 		case APP_CMD_START:
+                    ::GEO::AndroidUtils::debug_log("command: APP_CMD_START");
 		    data->is_visible = true;
 		    break;
 		    
 		case APP_CMD_STOP:
+                    ::GEO::AndroidUtils::debug_log("command: APP_CMD_STOP");                    
 		    data->is_visible = false;
 		    break;
 
 		case APP_CMD_SAVE_STATE:
+                    ::GEO::AndroidUtils::debug_log("command: APP_CMD_SAVE_STATE");                    
 		    break;
 		
 		case APP_CMD_PAUSE:
+                    ::GEO::AndroidUtils::debug_log("command: APP_CMD_PAUSE");                    
 		    break;
 		
 		case APP_CMD_RESUME:
+                    ::GEO::AndroidUtils::debug_log("command: APP_CMD_RESUME");                    
 		    break;
 
 		case APP_CMD_WINDOW_RESIZED:
+                    ::GEO::AndroidUtils::debug_log("command: APP_CMD_WINDOW_RESIZED");                     
 		    break;
 		
 		case APP_CMD_CONFIG_CHANGED:
+                    ::GEO::AndroidUtils::debug_log("command: APP_CMD_CONFIG_CHANGED");                     
 		    break;
 		    
 		case APP_CMD_LOW_MEMORY:
+                    ::GEO::AndroidUtils::debug_log("command: APP_CMD_LOW_MEMORY");                     
 		    break;
 	    }
 	}
 
 	/*
-	 * \brief The callback to handle Android mouse events.
+	 * \brief The callback to handle Android mouse events in the rendering
+         *  area
+         * \details See ImGui_ImplAndroidExt_SetMouseUserCallback()
 	 * \param[in] x , y window coordinates of the event
 	 * \param[in] button the button
 	 * \param[in] action the action (one of 
@@ -1583,26 +1577,34 @@ namespace GEO {
 		CmdLine::get_android_app()->userData
 	    );
 
+            static const char* action_names[] = {
+                "up", "down", "drag", "unknown"
+            };
+
+            static const char* source_names[] = {
+                "keyboard", "mouse", "finger", "stylus", "unknown"
+            };
+            
+            ::GEO::AndroidUtils::debug_log(
+                std::string("mouse CB  ") +
+                " (" + String::to_string(x) + "," + String::to_string(y) + ")" +
+                " btn=" + String::to_string(button) +
+                " action=" + action_names[std::min(action,3)] +
+                " source=" + source_names[std::min(source,4)]
+            );
+            
 	    // For touch devices, hovering does not generate
 	    // events, and we need to update ImGui flags that
 	    // indicate whether we are hovering ImGui or another
 	    // zone of the window.
-	    if(button == 0 &&
-	       action == EVENT_ACTION_DOWN &&
-	       source == EVENT_SOURCE_FINGER
+	    if(
+	        action == EVENT_ACTION_DOWN &&
+	       (source == EVENT_SOURCE_FINGER || source == EVENT_SOURCE_MOUSE)
 	    ) {
 		ImGui::GetIO().MousePos = ImVec2(x,y);
 		ImGui::UpdateHoveredWindowAndCaptureFlags();
-		// Mark the soft keyboard as hidden on
-		// finger touch if text input is required,
-		// so that if the user re-touches a text entry zone
-		// after having hidden the soft keyboard, it
-		// will be re-opened.
-		if(ImGui::GetIO().WantTextInput) {		
-		    app->reset_soft_keyboard_flag();
-		}
 	    }
-	    
+
 	    if(action != EVENT_ACTION_UNKNOWN) {
 		if(!ImGui::GetIO().WantCaptureMouse) {
 		    if(action != EVENT_ACTION_UP) {
@@ -1610,31 +1612,16 @@ namespace GEO {
 		    }
 		    app->mouse_button_callback(button, action, 0, source);
 		}
-
-		// Note: when a menu is open and you click elsewhere, the
-		// WantCaptureMouse flag is still set, and the framework
-		// misses the "mouse button up" event. If a translation is
-		// active, it remains active later ("sticky translation" bug).
-		// The following code always generates a "mouse button up" event
-		// to solve this problem.
-		if(ImGui::GetIO().WantCaptureMouse && action==EVENT_ACTION_UP) {
-		    ImVec2 mouse_pos = ImGui::GetIO().MousePos;
-		    app->cursor_pos_callback(mouse_pos.x, mouse_pos.y, source);
-		    app->mouse_button_callback(button,action, 0, source);
-		}
 	    }
 	    app->update();
 	}
-	
+        
     }
     
     void Application::callbacks_initialize() {
-	data_->app->onAppCmd = android_command_handler;
-	// Note: app->onInputEvent is initialized by
-	//   ImGui_ImplAndroid_Init(app).
-	ImGui_ImplAndroid_SetMouseUserCallback(
-	    android_mouse_callback
-	);
+	data_->app->onAppCmd     = android_command_handler;
+        data_->app->onInputEvent = android_input_event_handler; 
+        ImGui_ImplAndroidExt_SetMouseUserCallback(android_mouse_callback);
     }
     
     void Application::set_window_icon(Image* icon_image) {
@@ -1655,7 +1642,6 @@ namespace GEO {
 	geo_argused(h);
     }
 
-
     void Application::list_video_modes() {
     }
 
@@ -1674,7 +1660,7 @@ namespace GEO {
     }
 
     void* Application::impl_window() {
-	return nullptr;
+        return nullptr;
     }
 #else
 # error "No windowing system"
@@ -1771,98 +1757,6 @@ namespace GEO {
 /************************ Utilities *************************************/
 
 namespace GEO {
-
-    void StyleColorsCorporateGrey(bool threeD) {
-	ImGuiStyle & style = ImGui::GetStyle();
-	ImVec4 * colors = style.Colors;
-	
-	/// 0 = FLAT APPEARENCE
-	/// 1 = MORE "3D" LOOK
-	float is3D = threeD ? 1.0f : 0.0f;
-		
-	colors[ImGuiCol_Text]                   = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
-	colors[ImGuiCol_TextDisabled]           = ImVec4(0.40f, 0.40f, 0.40f, 1.00f);
-	colors[ImGuiCol_ChildBg]                = ImVec4(0.15f, 0.15f, 0.15f, 1.00f); //BL orig=0.25
-	colors[ImGuiCol_WindowBg]               = ImVec4(0.20f, 0.20f, 0.20f, 1.00f); //BL orig=0.25
-	colors[ImGuiCol_PopupBg]                = ImVec4(0.25f, 0.25f, 0.25f, 1.00f);
-	colors[ImGuiCol_Border]                 = ImVec4(0.12f, 0.12f, 0.12f, 0.71f);
-	colors[ImGuiCol_BorderShadow]           = ImVec4(1.00f, 1.00f, 1.00f, 0.06f);
-	colors[ImGuiCol_FrameBg]                = ImVec4(0.42f, 0.42f, 0.42f, 0.54f);
-	colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.42f, 0.42f, 0.42f, 0.40f);
-	colors[ImGuiCol_FrameBgActive]          = ImVec4(0.56f, 0.56f, 0.56f, 0.67f);
-	colors[ImGuiCol_TitleBg]                = ImVec4(0.19f, 0.19f, 0.19f, 1.00f);
-	colors[ImGuiCol_TitleBgActive]          = ImVec4(0.22f, 0.22f, 0.22f, 1.00f);
-	colors[ImGuiCol_TitleBgCollapsed]       = ImVec4(0.17f, 0.17f, 0.17f, 0.90f);
-	colors[ImGuiCol_MenuBarBg]              = ImVec4(0.335f, 0.335f, 0.335f, 1.000f);
-	colors[ImGuiCol_ScrollbarBg]            = ImVec4(0.24f, 0.24f, 0.24f, 0.53f);
-	colors[ImGuiCol_ScrollbarGrab]          = ImVec4(0.41f, 0.41f, 0.41f, 1.00f);
-	colors[ImGuiCol_ScrollbarGrabHovered]   = ImVec4(0.52f, 0.52f, 0.52f, 1.00f);
-	colors[ImGuiCol_ScrollbarGrabActive]    = ImVec4(0.76f, 0.76f, 0.76f, 1.00f);
-	colors[ImGuiCol_CheckMark]              = ImVec4(0.65f, 0.65f, 0.65f, 1.00f);
-	colors[ImGuiCol_SliderGrab]             = ImVec4(0.52f, 0.52f, 0.52f, 1.00f);
-	colors[ImGuiCol_SliderGrabActive]       = ImVec4(0.64f, 0.64f, 0.64f, 1.00f);
-	colors[ImGuiCol_Button]                 = ImVec4(0.54f, 0.54f, 0.54f, 0.35f);
-	colors[ImGuiCol_ButtonHovered]          = ImVec4(0.52f, 0.52f, 0.52f, 0.59f);
-	colors[ImGuiCol_ButtonActive]           = ImVec4(0.76f, 0.76f, 0.76f, 1.00f);
-	colors[ImGuiCol_Header]                 = ImVec4(0.38f, 0.38f, 0.38f, 1.00f);
-	colors[ImGuiCol_HeaderHovered]          = ImVec4(0.47f, 0.47f, 0.47f, 1.00f);
-	colors[ImGuiCol_HeaderActive]           = ImVec4(0.76f, 0.76f, 0.76f, 0.77f);
-	colors[ImGuiCol_Separator]              = ImVec4(0.000f, 0.000f, 0.000f, 0.137f);
-	colors[ImGuiCol_SeparatorHovered]       = ImVec4(0.700f, 0.671f, 0.600f, 0.290f);
-	colors[ImGuiCol_SeparatorActive]        = ImVec4(0.702f, 0.671f, 0.600f, 0.674f);
-	colors[ImGuiCol_ResizeGrip]             = ImVec4(0.26f, 0.59f, 0.98f, 0.25f);
-	colors[ImGuiCol_ResizeGripHovered]      = ImVec4(0.26f, 0.59f, 0.98f, 0.67f);
-	colors[ImGuiCol_ResizeGripActive]       = ImVec4(0.26f, 0.59f, 0.98f, 0.95f);
-	colors[ImGuiCol_PlotLines]              = ImVec4(0.61f, 0.61f, 0.61f, 1.00f);
-	colors[ImGuiCol_PlotLinesHovered]       = ImVec4(1.00f, 0.43f, 0.35f, 1.00f);
-	colors[ImGuiCol_PlotHistogram]          = ImVec4(0.90f, 0.70f, 0.00f, 1.00f);
-	colors[ImGuiCol_PlotHistogramHovered]   = ImVec4(1.00f, 0.60f, 0.00f, 1.00f);
-	colors[ImGuiCol_TextSelectedBg]         = ImVec4(0.73f, 0.73f, 0.73f, 0.35f);
-	colors[ImGuiCol_ModalWindowDimBg]       = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
-	colors[ImGuiCol_DragDropTarget]         = ImVec4(1.00f, 1.00f, 0.00f, 0.90f);
-	colors[ImGuiCol_NavHighlight]           = ImVec4(0.26f, 0.59f, 0.98f, 1.00f);
-	colors[ImGuiCol_NavWindowingHighlight]  = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
-	colors[ImGuiCol_NavWindowingDimBg]      = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
-
-	style.PopupRounding = 3;
-
-	style.WindowPadding = ImVec2(4, 4);
-	style.FramePadding  = ImVec2(6, 4);
-	style.ItemSpacing   = ImVec2(6, 2);
-
-	style.ScrollbarSize = 18;
-
-	style.WindowBorderSize = 1;
-	style.ChildBorderSize  = 1;
-	style.PopupBorderSize  = 1;
-	style.FrameBorderSize  = is3D; 
-
-	style.WindowRounding    = 3;
-	style.ChildRounding     = 3;
-	style.FrameRounding     = 3;
-	style.ScrollbarRounding = 2;
-	style.GrabRounding      = 3;
-
-#ifdef IMGUI_HAS_DOCK 
-	style.TabBorderSize = is3D; 
-	style.TabRounding   = 3;
-
-	colors[ImGuiCol_DockingEmptyBg]     = ImVec4(0.38f, 0.38f, 0.38f, 1.00f);
-	colors[ImGuiCol_Tab]                = ImVec4(0.25f, 0.25f, 0.25f, 1.00f);
-	colors[ImGuiCol_TabHovered]         = ImVec4(0.40f, 0.40f, 0.40f, 1.00f);
-	colors[ImGuiCol_TabActive]          = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
-	colors[ImGuiCol_TabUnfocused]       = ImVec4(0.25f, 0.25f, 0.25f, 1.00f);
-	colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
-	colors[ImGuiCol_DockingPreview]     = ImVec4(0.85f, 0.85f, 0.85f, 0.28f);
-
-	if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-	{
-	    style.WindowRounding = 0.0f;
-	    style.Colors[ImGuiCol_WindowBg].w = 1.0f;
-	}
-#endif
-    }
-
 
 #if defined(GEO_GLFW) && !defined(GEO_OS_EMSCRIPTEN)
 

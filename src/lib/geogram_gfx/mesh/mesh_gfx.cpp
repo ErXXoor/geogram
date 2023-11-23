@@ -107,7 +107,7 @@ namespace GEO {
         ES_profile_ = false;
     }
 
-    MeshGfx::~MeshGfx() {
+    void MeshGfx::cleanup() {
         if(vertices_VAO_ != 0) {
             glupDeleteVertexArrays(1,&vertices_VAO_);
             vertices_VAO_ = 0;
@@ -152,8 +152,17 @@ namespace GEO {
             glDeleteBuffers(1,&vertices_attribute_VBO_);
             vertices_attribute_VBO_ = 0;
         }
+        buffer_objects_dirty_ = true;
+        attributes_buffer_objects_dirty_ = true;
+        vertices_filter_.dirty = true;
+        facets_filter_.dirty = true;
+        cells_filter_.dirty = true;
     }
 
+    MeshGfx::~MeshGfx() {
+        cleanup();
+    }
+    
     bool MeshGfx::can_use_array_mode(GLUPprimitive prim) const {
         if(do_animation_) {
             return false;
@@ -1823,6 +1832,7 @@ namespace GEO {
         }
 
         #ifndef GEO_OS_EMSCRIPTEN
+        #ifndef GEO_OS_ANDROID
         if(hw_primitive_filtering) {
             if(dirty) {
                 update_or_check_buffer_object(
@@ -1849,11 +1859,13 @@ namespace GEO {
             glupEnable(GLUP_PRIMITIVE_FILTERING);
         }
         #endif
+        #endif
         return true;
     }
 
     void MeshGfx::Filter::end() {
         #ifndef GEO_OS_EMSCRIPTEN
+        #ifndef GEO_OS_ANDROID
         if(glupIsEnabled(GLUP_PRIMITIVE_FILTERING)) {
             glupDisable(GLUP_PRIMITIVE_FILTERING);
             glActiveTexture(
@@ -1862,6 +1874,7 @@ namespace GEO {
             glBindTexture(GL_TEXTURE_BUFFER, 0);
             glActiveTexture(GL_TEXTURE0);
         }
+        #endif
         #endif
         if(attribute.is_bound()) {
             attribute.unbind();

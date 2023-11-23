@@ -627,7 +627,7 @@ namespace GEO {
 	}
 	
 	if(ImGui::Button(
-	       (icon_UTF8("home") + " Home").c_str(),
+	       (icon_UTF8("home")).c_str(),
 	       ImVec2(-1.0, 0.0)
 	)) {
 	    home();
@@ -644,7 +644,7 @@ namespace GEO {
 	    if(clipping_) {
 		ImGui::Combo(
 		    "##mode", (int*)&clip_mode_,                
-		    "std. GL\0cells\0straddle\0slice\0\0"
+		    "std. GL\0cells\0stradd.\0slice\0\0"
 		);
 		ImGui::Checkbox(
 		    "edit clip", &edit_clip_
@@ -655,7 +655,7 @@ namespace GEO {
 	    }
 	    ImGui::Separator();
 	}
-	ImGui::ColorEdit3WithPalette("Background", background_color_.data());
+	ImGui::ColorEdit3WithPalette("Backgnd", background_color_.data());
 	// Full-screen effects are for now deactivated under Android:
 	// SSAO has stripes (and is damned slow)
 	// unsharp masking gives a black screen
@@ -1387,6 +1387,7 @@ namespace GEO {
 		colormaps_[i].texture = 0;
             }
         }
+        colormaps_.resize(0);
         if(geogram_logo_texture_ != 0) {
             glDeleteTextures(1, &geogram_logo_texture_);
 	    geogram_logo_texture_ = 0;

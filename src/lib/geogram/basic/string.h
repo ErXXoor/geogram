@@ -214,6 +214,22 @@ namespace GEO {
         );
 
         /**
+         * \brief Creates a string from a format string and additional 
+         *  arguments. Works like sprintf()
+         * \param[in] format the format string
+         */ 
+        std::string GEOGRAM_API format(const char* format, ...)
+#ifndef GOMGEN            
+#ifdef GEO_COMPILER_GCC_FAMILY
+        // Tells the compiler that format is a printf-like format
+        // string, so that it can check that the arguments match
+        // the format string and bark at you if it is not the case.
+        __attribute__ ((__format__(printf, 1, 2)))
+#endif
+#endif            
+        ; 
+
+        /**
          * \brief Converts a typed value to a string
          * \param[in] value the typed value to convert
          * \return a string that contain the stringified form of the value

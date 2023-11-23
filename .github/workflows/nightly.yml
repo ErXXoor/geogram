@@ -24,6 +24,12 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Checkout exploragram
+        uses: actions/checkout@v3
+        with:
+          repository: BrunoLevy/exploragram
+          path: src/lib/exploragram
+
       - name: Checkout data
         uses: actions/checkout@v3
         with:
@@ -50,7 +56,7 @@ jobs:
 
       - name: Configure (Linux/MacOS)
         run: |
-          cp CMakeOptions.txt.${{matrix.options}} CMakeOptions.txt
+          cp cmake/options/CMakeOptions.txt.${{matrix.options}} CMakeOptions.txt
           ./configure.sh --with-${{ matrix.tool }}
           echo "platform="\
           `./configure.sh --show-platform`-${{ matrix.config }} >> $GITHUB_ENV

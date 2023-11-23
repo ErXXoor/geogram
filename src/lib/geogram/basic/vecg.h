@@ -42,6 +42,7 @@
 
 #include <geogram/basic/common.h>
 #include <geogram/basic/numeric.h>
+#include <geogram/basic/determinant.h>
 #include <geogram/basic/memory.h>
 #include <geogram/basic/assert.h>
 
@@ -648,6 +649,12 @@ namespace GEO {
             return data()[i];
         }
 
+        /** \brief Optimizes coordinate representation */
+        void optimize() {
+            Numeric::optimize_number_representation(x);
+            Numeric::optimize_number_representation(y);
+        }
+        
         /** \brief Vector x coordinate */
         T x;
         /** \brief Vector y coordinate */
@@ -710,9 +717,9 @@ namespace GEO {
 
         /** \copydoc vecng::vecng() */
         vecng() :
-            x(0),
-            y(0),
-            z(0) {
+            x(T(0.0)),
+            y(T(0.0)),
+            z(T(0.0)) {
         }
 
         /**
@@ -852,6 +859,13 @@ namespace GEO {
             return data()[i];
         }
 
+        /** \brief Optimizes coordinate representation */
+        void optimize() {
+            Numeric::optimize_number_representation(x);
+            Numeric::optimize_number_representation(y);
+            Numeric::optimize_number_representation(z);
+        }
+        
         /** \brief Vector x coordinate */
         T x;
         /** \brief Vector y coordinate */
@@ -883,9 +897,9 @@ namespace GEO {
         const vecng<3, T>& v1, const vecng<3, T>& v2
     ) {
         return vecng<3, T>(
-            v1.y * v2.z - v1.z * v2.y,
-            v1.z * v2.x - v1.x * v2.z,
-            v1.x * v2.y - v1.y * v2.x
+            det2x2(v1.y, v2.y, v1.z, v2.z),
+            det2x2(v1.z, v2.z, v1.x, v2.x),
+            det2x2(v1.x, v2.x, v1.y, v2.y)
         );
     }
 
@@ -1142,6 +1156,29 @@ namespace GEO {
         }
         return in;
     }
+
+    /************************************************************************/
+
+    namespace Numeric {
+        
+        template<class T> 
+        inline void optimize_number_representation(
+            vecng<2,T>& v
+        ) {
+            v.optimize();
+        }
+
+        template<class T>
+        inline void optimize_number_representation(
+            vecng<3,T>& v
+        ) {
+            v.optimize();
+        }
+        
+    }
+
+    /************************************************************************/
+    
 }
 
 #endif
