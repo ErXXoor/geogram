@@ -526,55 +526,59 @@ namespace GEO {
 
             out << "usemtl Material_0" << std::endl;
             if(ioflags.has_element(MESH_FACETS)) {
-                for(index_t f = 0; f < M.facets.nb(); ++f) {
+                if (!M.vertices.has_bisector()) {
+                    for (index_t f = 0; f < M.facets.nb(); ++f) {
+                      out << "f ";
+                      for (index_t c = M.facets.corners_begin(f);
+                          c < M.facets.corners_end(f); ++c
+                          ) {
+                          out << M.facet_corners.vertex(c) + 1;
+                          if (tex_coord_.is_bound()) {
+                              out << "/" << vt_index[vt_old2new[c]] + 1;
+                          }
+                          else if (vertex_tex_coord_.is_bound()) {
+                              out << "/" << M.facet_corners.vertex(c) + 1;
+                          }
+                          out << " ";
+                      }
+                      out << std::endl;
 
-
-                    /*out << "f ";
-                    for (index_t c = M.facets.corners_begin(f);
-                        c < M.facets.corners_end(f); ++c
-                        ) {
-                        out << M.facet_corners.vertex(c) + 1;
-                        if (tex_coord_.is_bound()) {
-                            out << "/" << vt_index[vt_old2new[c]] + 1;
-                        }
-                        else if (vertex_tex_coord_.is_bound()) {
-                            out << "/" << M.facet_corners.vertex(c) + 1;
-                        }
-                        out << " ";
+                      //if (f == 2)
+                      //	int ss = 1;
+                      //break;
                     }
-                    out << std::endl;*/
+                }
+                else {
+                    for(index_t f = 0; f < M.facets.nb(); ++f) {
 
-                    //if (f == 2)
-                    //	int ss = 1;
-                    //break;
-
-                    std::vector<index_t> facets;
-                    for (index_t c = M.facets.corners_begin(f);
-                         c < M.facets.corners_end(f); ++c
-                            ) {
-                        facets.push_back(M.facet_corners.vertex(c));
-                    }
-                    for (int t = 0; t < facets.size(); t++)
-                    {
-                        bool bout = false;
-                        const std::set<index_t> bise = M.vertices.get_bisectors(facets[t]);
-                        const std::set<index_t> bise1 = M.vertices.get_bisectors(facets[(t + 1) % facets.size()]);
-                        if (!bise1.empty() && !bise.empty()) {
-                            std::vector<index_t> common_data;
-                            set_intersection(bise.begin(), bise.end(), bise1.begin(), bise1.end(),
-                                             std::back_inserter(common_data));
-                            if (bise.size() <= 2 && bise1.size() <= 2 && common_data.size() != bise.size())
-                                bout = false;
-                            else if (!common_data.empty())
-                                bout = true;
+                        std::vector<index_t> facets;
+                        for (index_t c = M.facets.corners_begin(f);
+                             c < M.facets.corners_end(f); ++c
+                                ) {
+                            facets.push_back(M.facet_corners.vertex(c));
                         }
-                        if (bout)
+                        for (int t = 0; t < facets.size(); t++)
                         {
-                            out << "l " << facets[t] + 1 << " " << facets[(t + 1) % facets.size()] + 1;
-                            out << std::endl;
+                            bool bout = false;
+                            const std::set<index_t> bise = M.vertices.get_bisectors(facets[t]);
+                            const std::set<index_t> bise1 = M.vertices.get_bisectors(facets[(t + 1) % facets.size()]);
+                            if (!bise1.empty() && !bise.empty()) {
+                                std::vector<index_t> common_data;
+                                set_intersection(bise.begin(), bise.end(), bise1.begin(), bise1.end(),
+                                                 std::back_inserter(common_data));
+                                if (bise.size() <= 2 && bise1.size() <= 2 && common_data.size() != bise.size())
+                                    bout = false;
+                                else if (!common_data.empty())
+                                    bout = true;
+                            }
+                            if (bout)
+                            {
+                                out << "l " << facets[t] + 1 << " " << facets[(t + 1) % facets.size()] + 1;
+                                out << std::endl;
+                            }
                         }
-                    }
 
+                    }
                 }
                 if(
                         facet_region_.is_bound()
