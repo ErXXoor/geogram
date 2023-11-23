@@ -356,7 +356,9 @@ namespace {
      * \retval non-zero value otherwise
      */
     int polyhedral_2Dmesher(
-            const std::string& input_filename, std::string output_filename
+            const std::string& input_filename, 
+            std::string output_filename,
+            std::string output_filename_dt="NULL"
     ) {
         Mesh M_in;
         Mesh M_out;
@@ -498,6 +500,16 @@ namespace {
             mesh_save(M_out, output_filename, flags);
         }
 
+        if (output_filename_dt != "NULL") {
+            Mesh M_out_dt;
+            CVT.RVD()->compute_RDT(M_out_dt, GEO::RestrictedVoronoiDiagram::RDT_RVC_CENTROIDS);
+
+			MeshIOFlags flags;
+			flags.set_attributes(MESH_ALL_ATTRIBUTES);
+			mesh_save(M_out_dt, output_filename_dt, flags);
+		}
+
+
         return 0;
     }
 
@@ -557,7 +569,7 @@ int main(int argc, char** argv) {
         
         std::vector<std::string> filenames;
 
-        if(!CmdLine::parse(argc, argv, filenames, "inputfile <outputfile>")) {
+        if(!CmdLine::parse(argc, argv, filenames, "inputfile <outputfile> <outputfiledt>")) {
             return 1;
         }
 
@@ -566,8 +578,14 @@ int main(int argc, char** argv) {
         std::string output_filename =
             filenames.size() >= 2 ? filenames[1] : std::string("out.meshb");
         Logger::out("I/O") << "Output = " << output_filename << std::endl;
+
+        std::string output_filename_dt =
+			filenames.size() >= 3 ? filenames[2] : std::string("NULL");
+        Logger::out("I/O") << "Output_dt = " << output_filename_dt << std::endl;
+
         CmdLine::set_arg("input", input_filename);
         CmdLine::set_arg("output", output_filename);
+        CmdLine::set_arg("output_dt", output_filename_dt);
 
         if(CmdLine::get_arg_bool("tet")) {
             return tetrahedral_mesher(input_filename, output_filename);
@@ -575,7 +593,7 @@ int main(int argc, char** argv) {
 
 	
         if(CmdLine::get_arg_bool("poly")) {
-            return polyhedral_2Dmesher(input_filename, output_filename);
+            return polyhedral_2Dmesher(input_filename, output_filename,output_filename_dt);
         }
         
         Mesh M_in, M_out;

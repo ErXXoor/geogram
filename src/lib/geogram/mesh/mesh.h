@@ -555,6 +555,11 @@ namespace GEO {
             else
                 bisectors.emplace_back(val);
         }
+
+        bool has_bisector() const
+        {
+			return !bisectors.empty();
+		}
         
     protected:
         
