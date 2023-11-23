@@ -43,17 +43,17 @@ namespace {
      * \param[in] min_comp_area connected components smaller than
      *   this threshold are discarded
      */
-    void remove_small_components(Mesh& M, double min_comp_area) {
-        if(min_comp_area == 0.0) {
+    void remove_small_components(Mesh &M, double min_comp_area) {
+        if (min_comp_area == 0.0) {
             return;
         }
         index_t nb_f_removed = M.facets.nb();
         remove_small_connected_components(M, min_comp_area);
         nb_f_removed -= M.facets.nb();
-        if(nb_f_removed != 0) {
+        if (nb_f_removed != 0) {
             double radius = bbox_diagonal(M);
             double epsilon = CmdLine::get_arg_percent(
-                "pre:epsilon", radius
+                    "pre:epsilon", radius
             );
             mesh_repair(M, MESH_REPAIR_DEFAULT, epsilon);
         }
@@ -63,16 +63,16 @@ namespace {
      * \brief Reconstructs a mesh from a point set.
      * \param[in,out] M_in the input point set and the reconstructed mesh
      */
-    void reconstruct(Mesh& M_in) {
+    void reconstruct(Mesh &M_in) {
         Logger::div("reconstruction");
 
         Logger::out("Co3Ne") << "Preparing data" << std::endl;
 
         index_t Psmooth_iter = CmdLine::get_arg_uint("co3ne:Psmooth_iter");
         index_t nb_neigh = CmdLine::get_arg_uint("co3ne:nb_neighbors");
-        
-        if(CmdLine::get_arg("algo:reconstruct") == "Poisson") {
-            if(Psmooth_iter != 0) {
+
+        if (CmdLine::get_arg("algo:reconstruct") == "Poisson") {
+            if (Psmooth_iter != 0) {
                 Co3Ne_smooth(M_in, nb_neigh, Psmooth_iter);
             }
             bool has_normals = false;
@@ -81,78 +81,78 @@ namespace {
                 normal.bind_if_is_defined(M_in.vertices.attributes(), "normal");
                 has_normals = (normal.is_bound() && normal.dimension() == 3);
             }
-            
-            if(!has_normals) {
+
+            if (!has_normals) {
                 // TODO: add a way of making normals orientation coherent
                 // in Co3Ne_compute_normals...
 
-                if(M_in.facets.nb() != 0) {
+                if (M_in.facets.nb() != 0) {
                     Attribute<double> normal;
                     normal.bind_if_is_defined(
-                        M_in.vertices.attributes(),"normal"
+                            M_in.vertices.attributes(), "normal"
                     );
-                    if(!normal.is_bound()) {
+                    if (!normal.is_bound()) {
                         normal.create_vector_attribute(
-                            M_in.vertices.attributes(), "normal", 3
+                                M_in.vertices.attributes(), "normal", 3
                         );
                     }
-                    for(index_t i=0; i<M_in.vertices.nb()*3; ++i) {
-                        normal[i]=0.0;
+                    for (index_t i = 0; i < M_in.vertices.nb() * 3; ++i) {
+                        normal[i] = 0.0;
                     }
-                    for(index_t f=0; f<M_in.facets.nb(); ++f) {
+                    for (index_t f = 0; f < M_in.facets.nb(); ++f) {
                         vec3 N = Geom::mesh_facet_normal(M_in, f);
-                        for(index_t lv=0; lv<M_in.facets.nb_vertices(f); ++lv) {
-                            index_t v = M_in.facets.vertex(f,lv);
-                            normal[3*v  ] += N.x;
-                            normal[3*v+1] += N.y;
-                            normal[3*v+2] += N.z;
+                        for (index_t lv = 0; lv < M_in.facets.nb_vertices(f); ++lv) {
+                            index_t v = M_in.facets.vertex(f, lv);
+                            normal[3 * v] += N.x;
+                            normal[3 * v + 1] += N.y;
+                            normal[3 * v + 2] += N.z;
                         }
                     }
-                    for(index_t v=0; v<M_in.vertices.nb(); ++v) {
-                        vec3 N(normal[3*v],normal[3*v+1],normal[3*v+2]);
+                    for (index_t v = 0; v < M_in.vertices.nb(); ++v) {
+                        vec3 N(normal[3 * v], normal[3 * v + 1], normal[3 * v + 2]);
                         N = normalize(N);
-                        normal[3*v  ]=N.x;
-                        normal[3*v+1]=N.y;
-                        normal[3*v+2]=N.z;
+                        normal[3 * v] = N.x;
+                        normal[3 * v + 1] = N.y;
+                        normal[3 * v + 2] = N.z;
                     }
                 } else {
                     Logger::out("Poisson")
-                        << "Dataset has no normals, estimating them"
-                        << std::endl;
+                            << "Dataset has no normals, estimating them"
+                            << std::endl;
                     Logger::out("Poisson")
-                    << "(result may be not so good, normals may be incoherent)"
-                    << std::endl;
+                            << "(result may be not so good, normals may be incoherent)"
+                            << std::endl;
                     Co3Ne_compute_normals(M_in, nb_neigh, true);
                 }
             }
-            
+
             index_t depth = CmdLine::get_arg_uint("poisson:octree_depth");
             Mesh M_out;
             PoissonReconstruction recons;
             recons.set_depth(depth);
             Logger::out("Reconstruct")
-                << "Starting Poisson reconstruction..."
-                << std::endl;
+                    << "Starting Poisson reconstruction..."
+                    << std::endl;
             recons.reconstruct(&M_in, &M_out);
             Logger::out("Reconstruct")
-                << "Poisson reconstruction done."
-                << std::endl;
+                    << "Poisson reconstruction done."
+                    << std::endl;
             MeshElementsFlags what = MeshElementsFlags(
-                MESH_VERTICES | MESH_FACETS 
+                    MESH_VERTICES | MESH_FACETS
             );
             M_in.copy(M_out, true, what);
         } else {
             // Remove all facets
             M_in.facets.clear();
-            
+
             double bbox_diag = bbox_diagonal(M_in);
             double epsilon = CmdLine::get_arg_percent(
-                "pre:epsilon", bbox_diag
+                    "pre:epsilon", bbox_diag
             );
             mesh_repair(M_in, MESH_REPAIR_COLOCATE, epsilon);
-            
+
             double radius = CmdLine::get_arg_percent(
-                "co3ne:radius", bbox_diag
+                    "co3ne:radius", bbox_diag
             );
             Co3Ne_smooth_and_reconstruct(M_in, nb_neigh, Psmooth_iter, radius);
         }
@@ -165,7 +165,7 @@ namespace {
      * \param[in,out] M_in the mesh to pre-process
      * \return true if resulting mesh is valid, false otherwise
      */
-    bool preprocess(Mesh& M_in) {
+    bool preprocess(Mesh &M_in) {
 
         Logger::div("preprocessing");
         Stopwatch W("Pre");
@@ -175,27 +175,27 @@ namespace {
         double area = Geom::mesh_area(M_in, 3);
 
         int nb_kills = CmdLine::get_arg_int("pre:brutal_kill_borders");
-        for(int k=0; k<nb_kills; ++k) {
+        for (int k = 0; k < nb_kills; ++k) {
             vector<index_t> to_kill(M_in.facets.nb(), 0);
-            for(index_t f=0; f<M_in.facets.nb(); ++f) {
-                for(index_t c=M_in.facets.corners_begin(f);
-                    c<M_in.facets.corners_end(f); ++c
-                ) {
-                    if(M_in.facet_corners.adjacent_facet(c) == NO_FACET) {
+            for (index_t f = 0; f < M_in.facets.nb(); ++f) {
+                for (index_t c = M_in.facets.corners_begin(f);
+                     c < M_in.facets.corners_end(f); ++c
+                        ) {
+                    if (M_in.facet_corners.adjacent_facet(c) == NO_FACET) {
                         to_kill[f] = 1;
                     }
                 }
             }
-            index_t nb_facet_kill=0;
-            for(index_t i=0; i<to_kill.size(); ++i) {
-                if(to_kill[i] != 0) {
+            index_t nb_facet_kill = 0;
+            for (index_t i = 0; i < to_kill.size(); ++i) {
+                if (to_kill[i] != 0) {
                     ++nb_facet_kill;
                 }
             }
-            if(nb_facet_kill != 0) {
+            if (nb_facet_kill != 0) {
                 Logger::out("Pre")
-                    << "Killed " << nb_facet_kill << " facet(s) on border"
-                    << std::endl;
+                        << "Killed " << nb_facet_kill << " facet(s) on border"
+                        << std::endl;
                 M_in.facets.delete_elements(to_kill);
                 mesh_repair(M_in);
             } else {
@@ -203,77 +203,77 @@ namespace {
                 break;
             }
         }
-        
+
         index_t nb_bins = CmdLine::get_arg_uint("pre:vcluster_bins");
-        if(pre && nb_bins != 0) {
+        if (pre && nb_bins != 0) {
             mesh_decimate_vertex_clustering(M_in, nb_bins);
-        } else if(pre && CmdLine::get_arg_bool("pre:repair")) {
+        } else if (pre && CmdLine::get_arg_bool("pre:repair")) {
             MeshRepairMode mode = MESH_REPAIR_DEFAULT;
             double epsilon = CmdLine::get_arg_percent(
-                "pre:epsilon", radius
+                    "pre:epsilon", radius
             );
             mesh_repair(M_in, mode, epsilon);
         }
 
-        if(pre) {
+        if (pre) {
             remove_small_components(
-                M_in, CmdLine::get_arg_percent(
-                    "pre:min_comp_area", area
-                )
+                    M_in, CmdLine::get_arg_percent(
+                            "pre:min_comp_area", area
+                    )
             );
         }
 
-        if(pre) {
+        if (pre) {
             double max_area = CmdLine::get_arg_percent(
-                "pre:max_hole_area", area
+                    "pre:max_hole_area", area
             );
             index_t max_edges = CmdLine::get_arg_uint(
-                "pre:max_hole_edges"
+                    "pre:max_hole_edges"
             );
-            if(max_area != 0.0 && max_edges != 0) {
+            if (max_area != 0.0 && max_edges != 0) {
                 fill_holes(M_in, max_area, max_edges);
             }
         }
 
         double anisotropy = 0.02 * CmdLine::get_arg_double("remesh:anisotropy");
-        if(anisotropy != 0.0) {
+        if (anisotropy != 0.0) {
             compute_normals(M_in);
             index_t nb_normal_smooth =
-                CmdLine::get_arg_uint("pre:Nsmooth_iter");
-            if(nb_normal_smooth != 0) {
+                    CmdLine::get_arg_uint("pre:Nsmooth_iter");
+            if (nb_normal_smooth != 0) {
                 Logger::out("Nsmooth") << "Smoothing normals, "
-                    << nb_normal_smooth
-                    << " iteration(s)" << std::endl;
+                                       << nb_normal_smooth
+                                       << " iteration(s)" << std::endl;
                 simple_Laplacian_smooth(M_in, index_t(nb_normal_smooth), true);
             }
             set_anisotropy(M_in, anisotropy);
         }
 
-        if(CmdLine::get_arg_bool("remesh")) {
+        if (CmdLine::get_arg_bool("remesh")) {
             index_t nb_removed = M_in.facets.nb();
             remove_small_facets(M_in, 1e-30);
             nb_removed -= M_in.facets.nb();
-            if(nb_removed == 0) {
+            if (nb_removed == 0) {
                 Logger::out("Validate")
-                    << "Mesh does not have 0-area facets (good)" << std::endl;
+                        << "Mesh does not have 0-area facets (good)" << std::endl;
             } else {
                 Logger::out("Validate")
-                    << "Removed " << nb_removed
-                    << " 0-area facets" << std::endl;
+                        << "Removed " << nb_removed
+                        << " 0-area facets" << std::endl;
             }
         }
 
         double margin = CmdLine::get_arg_percent(
-            "pre:margin", radius
+                "pre:margin", radius
         );
-        if(pre && margin != 0.0) {
+        if (pre && margin != 0.0) {
             expand_border(M_in, margin);
         }
 
-        if(M_in.facets.nb() == 0) {
+        if (M_in.facets.nb() == 0) {
             Logger::warn("Preprocessing")
-                << "After pre-processing, got an empty mesh"
-                << std::endl;
+                    << "After pre-processing, got an empty mesh"
+                    << std::endl;
             // return false;
         }
 
@@ -287,63 +287,63 @@ namespace {
      * \param[in,out] M_out the mesh to pre-process
      * \return true if resulting mesh is valid, false otherwise
      */
-    bool postprocess(Mesh& M_out) {
+    bool postprocess(Mesh &M_out) {
         Logger::div("postprocessing");
         {
             Stopwatch W("Post");
-            if(CmdLine::get_arg_bool("post")) {
+            if (CmdLine::get_arg_bool("post")) {
                 double radius = bbox_diagonal(M_out);
                 double area = Geom::mesh_area(M_out, 3);
-                if(CmdLine::get_arg_bool("post:repair")) {
+                if (CmdLine::get_arg_bool("post:repair")) {
                     double epsilon = CmdLine::get_arg_percent(
-                        "pre:epsilon", radius
+                            "pre:epsilon", radius
                     );
                     mesh_repair(M_out, MESH_REPAIR_DEFAULT, epsilon);
                 }
                 remove_small_components(
-                    M_out, CmdLine::get_arg_percent(
-                        "post:min_comp_area", area
-                    )
+                        M_out, CmdLine::get_arg_percent(
+                                "post:min_comp_area", area
+                        )
                 );
                 double max_area = CmdLine::get_arg_percent(
-                    "post:max_hole_area", area
+                        "post:max_hole_area", area
                 );
                 index_t max_edges = CmdLine::get_arg_uint(
-                    "post:max_hole_edges"
+                        "post:max_hole_edges"
                 );
-                if(max_area != 0.0 && max_edges != 0) {
+                if (max_area != 0.0 && max_edges != 0) {
                     fill_holes(M_out, max_area, max_edges);
                 }
                 double deg3_dist = CmdLine::get_arg_percent(
-                    "post:max_deg3_dist", radius
+                        "post:max_deg3_dist", radius
                 );
-                while(remove_degree3_vertices(M_out, deg3_dist) != 0) {}
-                if(CmdLine::get_arg_bool("post:isect")) {
+                while (remove_degree3_vertices(M_out, deg3_dist) != 0) {}
+                if (CmdLine::get_arg_bool("post:isect")) {
                     mesh_remove_intersections(M_out);
                 }
             }
             orient_normals(M_out);
-            if(CmdLine::get_arg_bool("post:compute_normals")) {
+            if (CmdLine::get_arg_bool("post:compute_normals")) {
                 Attribute<double> normal;
                 normal.bind_if_is_defined(
-                    M_out.vertices.attributes(),
-                    "normal"
-                );
-                if(!normal.is_bound()) {
-                    normal.create_vector_attribute(
                         M_out.vertices.attributes(),
-                        "normal",
-                        3
+                        "normal"
+                );
+                if (!normal.is_bound()) {
+                    normal.create_vector_attribute(
+                            M_out.vertices.attributes(),
+                            "normal",
+                            3
                     );
                 }
-                for(index_t f=0; f<M_out.facets.nb(); ++f) {
-                    vec3 N = Geom::mesh_facet_normal(M_out,f);
+                for (index_t f = 0; f < M_out.facets.nb(); ++f) {
+                    vec3 N = Geom::mesh_facet_normal(M_out, f);
                     N = normalize(N);
-                    for(index_t lv=0; lv<M_out.facets.nb_vertices(f); ++lv) {
-                        index_t v = M_out.facets.vertex(f,lv);
-                        normal[3*v  ] = N.x;
-                        normal[3*v+1] = N.y;
-                        normal[3*v+2] = N.z;                        
+                    for (index_t lv = 0; lv < M_out.facets.nb_vertices(f); ++lv) {
+                        index_t v = M_out.facets.vertex(f, lv);
+                        normal[3 * v] = N.x;
+                        normal[3 * v + 1] = N.y;
+                        normal[3 * v + 2] = N.z;
                     }
                 }
             }
@@ -351,10 +351,10 @@ namespace {
 
         Logger::div("result");
         M_out.show_stats("FinalMesh");
-        if(M_out.facets.nb() == 0) {
+        if (M_out.facets.nb() == 0) {
             Logger::warn("Postprocessing")
-                << "After post-processing, got an empty mesh"
-                << std::endl;
+                    << "After post-processing, got an empty mesh"
+                    << std::endl;
             // return false;
         }
 
@@ -370,7 +370,9 @@ namespace {
      * \retval non-zero value otherwise
      */
     int polyhedral_2Dmesher(
-            const std::string& input_filename, std::string output_filename
+            const std::string &input_filename,
+            std::string output_filename,
+            std::string output_filename_dt
     ) {
         Mesh M_in;
         Mesh M_out;
@@ -396,18 +398,16 @@ namespace {
                     for (coord_index_t c = 0; c < dimension_; c++) {
                         if (index_t(c + 1) < in.nb_fields()) {
                             P[c] = in.field_as_double(index_t(c + 1));
-                        }
-                        else {
+                        } else {
                             P[c] = 0.0;
                         }
                     }
                     index_t v = M_in.vertices.create_vertex();
-                    double* p = M_in.vertices.point_ptr(v);
+                    double *p = M_in.vertices.point_ptr(v);
                     for (index_t c = 0; c < dimension_; ++c) {
                         p[c] = P[c];
                     }
-                }
-                else if (in.field_matches(0, "f")) {
+                } else if (in.field_matches(0, "f")) {
                     if (in.nb_fields() < 3) {
                         Logger::err("I/O")
                                 << "Line " << in.line_number()
@@ -428,8 +428,7 @@ namespace {
                             vertex_index = index_t(
                                     1 + int(M_in.vertices.nb()) + s_vertex_index
                             );
-                        }
-                        else {
+                        } else {
                             vertex_index = index_t(s_vertex_index);
                         }
                         facet_vertices.push_back(vertex_index - 1);
@@ -475,7 +474,7 @@ namespace {
                 CVT.set_progress_logger(&progress);
                 CVT.Lloyd_iterations(nb_iter);
             }
-            catch (const TaskCanceled&) {
+            catch (const TaskCanceled &) {
             }
 
             try {
@@ -484,15 +483,14 @@ namespace {
                 CVT.set_progress_logger(&progress);
                 CVT.Newton_iterations(nb_iter);
             }
-            catch (const TaskCanceled&) {
+            catch (const TaskCanceled &) {
             }
 
             CVT.set_progress_logger(nullptr);
 
             std::string fname2 = "voronoi_seeds_opt.obj";
 //            CVT.write_points(fname2);
-        }
-        else {
+        } else {
             if (!mesh_load(CmdLine::get_arg("poly:points_file"), M_points)) {
                 return 1;
             }
@@ -512,10 +510,20 @@ namespace {
             mesh_save(M_out, output_filename, flags);
         }
 
+        Mesh M_out_dt;
+        CVT.RVD()->compute_RDT(M_out_dt,
+                               GEO::RestrictedVoronoiDiagram::RDT_RVC_CENTROIDS);
+        {
+            MeshIOFlags flags;
+            flags.set_attributes(MESH_ALL_ATTRIBUTES);
+            mesh_save(M_out_dt, output_filename_dt, flags);
+        }
+
+
         return 0;
     }
 
-    
+
     /**
      * \brief Generates a tetrahedral mesh.
      * \param[in] input_filename name of the input file, can be
@@ -525,40 +533,40 @@ namespace {
      * \retval non-zero value otherwise
      */
     int tetrahedral_mesher(
-        const std::string& input_filename, const std::string& output_filename
+            const std::string &input_filename, const std::string &output_filename
     ) {
         MeshIOFlags flags;
         flags.set_element(MESH_CELLS);
 
         Mesh M_in;
-        if(!mesh_load(input_filename, M_in, flags)) {
+        if (!mesh_load(input_filename, M_in, flags)) {
             return 1;
         }
         mesh_tetrahedralize(
-            M_in,
-            CmdLine::get_arg_bool("tet:preprocess"),
-            CmdLine::get_arg_bool("tet:refine"),
-            CmdLine::get_arg_double("tet:quality")
+                M_in,
+                CmdLine::get_arg_bool("tet:preprocess"),
+                CmdLine::get_arg_bool("tet:refine"),
+                CmdLine::get_arg_double("tet:quality")
         );
         M_in.cells.compute_borders();
-        if(!mesh_save(M_in, output_filename, flags)) {
+        if (!mesh_save(M_in, output_filename, flags)) {
             return 1;
         }
         return 0;
     }
-    
+
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     using namespace GEO;
 
-    
-    GEO::initialize();    
-    
+
+    GEO::initialize();
+
     try {
 
         Stopwatch total("Total time");
-        
+
         CmdLine::import_arg_group("standard");
         CmdLine::import_arg_group("pre");
         CmdLine::import_arg_group("remesh");
@@ -568,97 +576,99 @@ int main(int argc, char** argv) {
         CmdLine::import_arg_group("co3ne");
         CmdLine::import_arg_group("tet");
         CmdLine::import_arg_group("poly");
-        
+
         std::vector<std::string> filenames;
 
-        if(!CmdLine::parse(argc, argv, filenames, "inputfile <outputfile>")) {
+        if (!CmdLine::parse(argc, argv, filenames, "inputfile <outputfile> <outputfiledt>")) {
             return 1;
         }
 
-        
+
         std::string input_filename = filenames[0];
         std::string output_filename =
-            filenames.size() >= 2 ? filenames[1] : std::string("out.meshb");
+                filenames.size() >= 2 ? filenames[1] : std::string("out.meshb");
+        std::string output_filename_dt = filenames.size() >= 3 ? filenames[2] : std::string("out_dt.meshb");
         Logger::out("I/O") << "Output = " << output_filename << std::endl;
         CmdLine::set_arg("input", input_filename);
         CmdLine::set_arg("output", output_filename);
+        CmdLine::set_arg("output_dt", output_filename_dt);
 
-        if(CmdLine::get_arg_bool("tet")) {
+        if (CmdLine::get_arg_bool("tet")) {
             return tetrahedral_mesher(input_filename, output_filename);
         }
 
-	
-        if(CmdLine::get_arg_bool("poly")) {
-            return polyhedral_2Dmesher(input_filename, output_filename);
+
+        if (CmdLine::get_arg_bool("poly")) {
+            return polyhedral_2Dmesher(input_filename, output_filename, output_filename_dt);
         }
-        
+
         Mesh M_in, M_out;
         {
             Stopwatch W("Load");
-            if(!mesh_load(input_filename, M_in)) {
+            if (!mesh_load(input_filename, M_in)) {
                 return 1;
             }
         }
 
-        
-        if(CmdLine::get_arg_bool("co3ne")) {
+
+        if (CmdLine::get_arg_bool("co3ne")) {
             reconstruct(M_in);
         }
 
-        if(!preprocess(M_in)) {
+        if (!preprocess(M_in)) {
             return 1;
         }
 
-        if(!CmdLine::get_arg_bool("remesh")) {
-            if(!postprocess(M_in)) {
+        if (!CmdLine::get_arg_bool("remesh")) {
+            if (!postprocess(M_in)) {
                 return 1;
             }
-            if(!mesh_save(M_in, output_filename)) {
+            if (!mesh_save(M_in, output_filename)) {
                 return 1;
             }
             return 0;
         }
 
         Logger::div("remeshing");
-	{
+        {
             double gradation = CmdLine::get_arg_double("remesh:gradation");
-            if(gradation != 0.0) {
+            if (gradation != 0.0) {
                 compute_sizing_field(
-                    M_in, gradation, CmdLine::get_arg_uint("remesh:lfs_samples")
+                        M_in, gradation, CmdLine::get_arg_uint("remesh:lfs_samples")
                 );
             }
             coord_index_t dim = 3;
             double anisotropy =
-                0.02 * CmdLine::get_arg_double("remesh:anisotropy");
-            if(anisotropy != 0.0 && M_in.vertices.dimension() >= 6) {
+                    0.02 * CmdLine::get_arg_double("remesh:anisotropy");
+            if (anisotropy != 0.0 && M_in.vertices.dimension() >= 6) {
                 dim = 6;
             }
             remesh_smooth(
-                M_in, M_out,
-                CmdLine::get_arg_uint("remesh:nb_pts"),
-                dim,
-                CmdLine::get_arg_uint("opt:nb_Lloyd_iter"),
-                CmdLine::get_arg_uint("opt:nb_Newton_iter"),
-                CmdLine::get_arg_uint("opt:Newton_m")
+                    M_in, M_out,
+                    CmdLine::get_arg_uint("remesh:nb_pts"),
+                    dim,
+                    CmdLine::get_arg_uint("opt:nb_Lloyd_iter"),
+                    CmdLine::get_arg_uint("opt:nb_Newton_iter"),
+                    CmdLine::get_arg_uint("opt:Newton_m")
             );
         }
 
-        if(M_out.facets.nb() == 0) {
+        if (M_out.facets.nb() == 0) {
             Logger::err("Remesh") << "After remesh, got an empty mesh"
-                << std::endl;
+                                  << std::endl;
             return 1;
         }
 
-        if(!postprocess(M_out)) {
+        if (!postprocess(M_out)) {
             return 1;
         }
 
-        if(!mesh_save(M_out, output_filename)) {
+        if (!mesh_save(M_out, output_filename)) {
             return 1;
         }
 
     }
-    catch(const std::exception& e) {
+    catch (const std::exception &e) {
         std::cerr << "Received an exception: " << e.what() << std::endl;
         return 1;
     }
