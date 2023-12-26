@@ -408,6 +408,10 @@ namespace GEO {
             point_is_locked_.clear();
         }
 
+        void set_simplex_func(IntegrationSimplex_var simplex_func) {
+            simplex_func_ = simplex_func;
+        }
+
     protected:
         /**
          * \brief Callback for the numerical solver.

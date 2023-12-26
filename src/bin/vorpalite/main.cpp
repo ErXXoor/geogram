@@ -26,6 +26,8 @@
 #include <geogram/delaunay/LFS.h>
 #include <geogram/voronoi/CVT.h>
 #include <geogram/voronoi/RVD_mesh_builder.h>
+#include "LpCVTIS.h"
+#include <geogram/voronoi/integration_simplex.h>
 #include <geogram/points/co3ne.h>
 
 #include <geogram/third_party/PoissonRecon/poisson_geogram.h>
@@ -367,7 +369,7 @@ namespace {
         Logger::div("Polyhedral meshing");
 
         //load 2d mesh
-        int dimension_ = 8;
+        int dimension_ = 3;
         M_in.clear();
         M_in.vertices.set_double_precision();
         M_in.vertices.set_dimension(dimension_);
@@ -443,6 +445,8 @@ namespace {
 
         CentroidalVoronoiTesselation CVT(&M_in, coord_index_t(dim));
         CVT.set_volumetric(false);
+        IntegrationSimplex_var IS = new LpCVTIS(M_in, false, 0, 0, nullptr);
+        CVT.set_simplex_func(IS);
 
         if (CmdLine::get_arg("poly:points_file") == "") {
 
@@ -513,7 +517,7 @@ namespace {
         return 0;
     }
 
-    
+
     /**
      * \brief Generates a tetrahedral mesh.
      * \param[in] input_filename name of the input file, can be

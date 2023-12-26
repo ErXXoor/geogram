@@ -2,6 +2,7 @@ set(APP_NAME vorpalite)
 aux_source_directories(SOURCES "" .)
 vor_add_executable(${APP_NAME} ${SOURCES})
 target_link_libraries(${APP_NAME} geogram)
+target_include_directories(${APP_NAME} PUBLIC .)
 
 install_runtime_targets(${APP_NAME})
 
