@@ -14,6 +14,9 @@ namespace GEO{
 
     ~LpCVTIS() override = default;
 
+    const double* vertex_ptr(index_t v) const;
+
+    void set_dim(unsigned int dim) { m_dim = dim; }
     double eval(
             index_t center_vertex_index,
             const GEOGen::Vertex& v0,
@@ -24,6 +27,10 @@ namespace GEO{
             index_t v_adj = index_t(-1)
             ) override;
 
+    private:
+    unsigned int m_dim;
+
     };
+
 }
 #endif //GEOGRAM_LPCVTIS_H

@@ -445,8 +445,10 @@ namespace {
 
         CentroidalVoronoiTesselation CVT(&M_in, coord_index_t(dim));
         CVT.set_volumetric(false);
-        IntegrationSimplex_var IS = new LpCVTIS(M_in, false, 0, 0, nullptr);
-        CVT.set_simplex_func(IS);
+        SmartPointer<LpCVTIS> IS = new LpCVTIS(M_in, false, 0, 0, nullptr);
+        IS->set_dim(dim);
+        SmartPointer<IntegrationSimplex> p_is = static_cast<IntegrationSimplex *>(IS);
+        CVT.set_simplex_func(p_is);
 
         if (CmdLine::get_arg("poly:points_file") == "") {
 
