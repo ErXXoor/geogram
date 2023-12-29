@@ -5,7 +5,7 @@
 #ifndef GEOGRAM_LPCVTIS_H
 #define GEOGRAM_LPCVTIS_H
 #include <geogram/voronoi/integration_simplex.h>
-
+#include <geogram/mesh/mesh_AABB.h>
 namespace GEO{
     class GEOGRAM_API LpCVTIS : public IntegrationSimplex {
     public:
@@ -43,6 +43,8 @@ namespace GEO{
     std::vector<std::vector<unsigned int>> E_pow;
     std::vector<std::vector<std::vector<unsigned int>>> dE_pow;
 
+    std::shared_ptr<GEO::Mesh> m_mesh;
+    std::shared_ptr<MeshFacetsAABB> m_meshaabb;
     };
 
 }

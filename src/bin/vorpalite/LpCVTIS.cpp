@@ -67,6 +67,13 @@ namespace GEO {
             }
         }
 
+        // construct mesh AABB
+        m_mesh = std::make_shared<GEO::Mesh>();
+        m_mesh->copy(mesh);
+
+        m_meshaabb = std::make_shared<MeshFacetsAABB>();
+        m_meshaabb->initialize(*m_mesh);
+
     }
 
     const double* LpCVTIS::vertex_ptr(index_t i) const {
@@ -86,7 +93,7 @@ namespace GEO {
         vec3 p1_vec3 = vec3(p1.point());
         vec3 p2_vec3 = vec3(p2.point());
         vec3 p3_vec3 = vec3(p3.point());
-        auto N = normalize( cross((p2_vec3 - p1_vec3), p3_vec3 - p1_vec3));
+        auto N = normalize( cross(p2_vec3 - p1_vec3,p3_vec3 - p1_vec3));
         GEO::mat3 N_mat3;
         N_mat3(0,0) = N.x*N.x;
         N_mat3(0,1) = N.x*N.y;
