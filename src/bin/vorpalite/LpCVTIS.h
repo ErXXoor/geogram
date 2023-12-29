@@ -9,16 +9,14 @@
 namespace GEO{
     class GEOGRAM_API LpCVTIS : public IntegrationSimplex {
     public:
-    LpCVTIS(const Mesh &mesh, bool volumetric, index_t nb_frames,
-            index_t nb_comp_per_frame, const double *frames);
+    LpCVTIS(const Mesh &mesh, bool volumetric, unsigned int dim, unsigned int degree);
 
     ~LpCVTIS() override = default;
 
     const double* vertex_ptr(index_t v) const;
-
-    void set_dim(unsigned int dim) { m_dim = dim; }
     double eval(
             index_t center_vertex_index,
+
             const GEOGen::Vertex& v0,
             const GEOGen::Vertex& v1,
             const GEOGen::Vertex& v2,
@@ -27,8 +25,23 @@ namespace GEO{
             index_t v_adj = index_t(-1)
             ) override;
 
+    double grad_tri(const vec3& U1, const vec3& U2, const vec3& U3,
+                        vec3& dTdU1, vec3& dTdU2, vec3& dTdU3);
+    //Utils
+    void vecmul(const double* p1, const double* p2, double* to);
+    void vecmul(const double* p1, const double* p2, const double* p3, double* to);
+    double vecbar(const double* p1);
+    void vecmadd(double s, const double* p1, const double* p2, const double* p3, double* to);
+    void vecmadd(double s, const vec3& p1, double t, const vec3& p2, vec3& to);
+    void matTvecmul(const mat3& M, const vec3& U, vec3& V);
+
     private:
     unsigned int m_dim;
+    unsigned int m_degree;
+    unsigned int nb_coeffs;
+    unsigned int nb_dcoeffs;
+    std::vector<std::vector<unsigned int>> E_pow;
+    std::vector<std::vector<std::vector<unsigned int>>> dE_pow;
 
     };
 

@@ -445,8 +445,7 @@ namespace {
 
         CentroidalVoronoiTesselation CVT(&M_in, coord_index_t(dim));
         CVT.set_volumetric(false);
-        SmartPointer<LpCVTIS> IS = new LpCVTIS(M_in, false, 0, 0, nullptr);
-        IS->set_dim(dim);
+        SmartPointer<LpCVTIS> IS = new LpCVTIS(M_in, false, 3, 2);
         SmartPointer<IntegrationSimplex> p_is = static_cast<IntegrationSimplex *>(IS);
         CVT.set_simplex_func(p_is);
 
