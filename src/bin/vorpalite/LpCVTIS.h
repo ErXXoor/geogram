@@ -43,8 +43,6 @@ namespace GEO{
     std::vector<std::vector<unsigned int>> E_pow;
     std::vector<std::vector<std::vector<unsigned int>>> dE_pow;
 
-    std::shared_ptr<GEO::Mesh> m_mesh;
-    std::shared_ptr<MeshFacetsAABB> m_meshaabb;
     };
 
 }

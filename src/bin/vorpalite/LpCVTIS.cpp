@@ -67,13 +67,6 @@ namespace GEO {
             }
         }
 
-        // construct mesh AABB
-        m_mesh = std::make_shared<GEO::Mesh>();
-        m_mesh->copy(mesh);
-
-        m_meshaabb = std::make_shared<MeshFacetsAABB>();
-        m_meshaabb->initialize(*m_mesh);
-
     }
 
     const double* LpCVTIS::vertex_ptr(index_t i) const {
@@ -107,7 +100,7 @@ namespace GEO {
 
         GEO::mat3 M;
         M.load_identity();
-        M =  N_mat3*4+ M;
+        M =  N_mat3*2+ M;
 
         auto p0 = vertex_ptr(v);
         std::vector<std::vector<GEO::vec3>> U_pow;
